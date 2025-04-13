@@ -1,5 +1,7 @@
 use std::{arch::aarch64::*, array};
 
+use hybrid_array::Array;
+
 use crate::{C0, C1};
 
 #[derive(Clone, Copy, Debug)]
@@ -126,3 +128,21 @@ impl State256 {
         out
     }
 }
+
+// #[test]
+// fn bench256() {
+//     let x = unsafe {
+//         vld1q_u8(const { [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15] }.as_ptr())
+//     };
+
+//     let mut s = State256::init([1; 32], [2; 32]);
+//     let m = Array([x; 4]);
+
+//     let start = Instant::now();
+//     for _ in 0..N {
+//         s = update256(black_box(s), black_box(m));
+//         s = update256(black_box(s), black_box(m));
+//     }
+//     black_box(s);
+//     dbg!(start.elapsed() * 1000 / D as u32 / N as u32);
+// }
