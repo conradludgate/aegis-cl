@@ -1,4 +1,7 @@
-use std::{marker::PhantomData, ops::Mul};
+use std::{
+    marker::PhantomData,
+    ops::{Mul, Sub},
+};
 
 use aead::{
     AeadCore, AeadInOut, Key, KeyInit, KeySizeUser, Nonce,
@@ -50,6 +53,8 @@ impl<D: ArraySize> AeadInOut for Aegis128X<D>
 where
     D: Mul<U32>,
     Prod<D, U32>: ArraySize,
+    // D: Mul<U16>,
+    // Prod<D, U16>: ArraySize,
 {
     fn encrypt_inout_detached(
         &self,
@@ -108,31 +113,31 @@ where
             state.absorb(ad_chunk);
         });
 
-        // // ct_blocks = Split(ct, R)
-        // // cn = Tail(ct, |ct| mod R)
-        // let (ct_blocks, cn) = buffer.reborrow().into_chunks();
+        // ct_blocks = Split(ct, R)
+        // cn = Tail(ct, |ct| mod R)
+        let (ct_blocks, cn) = buffer.reborrow().into_chunks();
 
-        // // for ci in ct_blocks:
-        // //     msg = msg || Dec(ci)
-        // for ci in ct_blocks {
-        //     state.decrypt_block(ci);
-        // }
+        // for ci in ct_blocks:
+        //     msg = msg || Dec(ci)
+        for ci in ct_blocks {
+            state.decrypt_block(ci);
+        }
 
-        // // if cn is not empty:
-        // //     msg = msg || DecPartial(cn)
-        // if !cn.is_empty() {
-        //     state.decrypt_partial(cn);
-        //     // let len = msg_tail.len();
-        //     // let mut msg_chunk = Array::default();
-        //     // msg_chunk[..len].copy_from_slice(msg_tail.get_in());
-        //     // f(InOut::from(&mut msg_chunk));
-        //     // msg_tail.get_out().copy_from_slice(&msg_chunk[..len]);
-        // }
+        // if cn is not empty:
+        //     msg = msg || DecPartial(cn)
+        if !cn.is_empty() {
+            state.decrypt_partial(cn);
+            // let len = msg_tail.len();
+            // let mut msg_chunk = Array::default();
+            // msg_chunk[..len].copy_from_slice(msg_tail.get_in());
+            // f(InOut::from(&mut msg_chunk));
+            // msg_tail.get_out().copy_from_slice(&msg_chunk[..len]);
+        }
 
-        util::process_inout_chunks_padded(buffer.reborrow(), |msg_chunk| {
-            // do I need to handle partial decrypt properly :think:
-            state.decrypt_block(msg_chunk);
-        });
+        // util::process_inout_chunks_padded(buffer.reborrow(), |msg_chunk| {
+        //     // do I need to handle partial decrypt properly :think:
+        //     state.decrypt_block(msg_chunk);
+        // });
 
         // expected_tag = Finalize(|ad|, |msg|)
         let expected_tag = state.finalize(ad_len_bits, msg_len_bits);
@@ -162,6 +167,9 @@ impl<D: ArraySize> State128X<D>
 where
     D: Mul<U32>,
     Prod<D, U32>: ArraySize,
+    // D: Mul<U16>,
+    // Prod<D, U16>: ArraySize,
+    // Prod<D, U32>: Sub<Prod<D, U16>, Output = Prod<D, U16>>,
 {
     fn new(key: &Key<Aegis128X<D>>, iv: &Nonce<Aegis128X<D>>) -> Self {
         let key = AesBlock::from_bytes(&key.0);
@@ -292,28 +300,30 @@ where
         self.update(t0, t1);
     }
 
-    fn decrypt_partial(&mut self, block: InOutBuf<'_, '_, u8>) {
+    fn decrypt_partial(&mut self, mut tail: InOutBuf<'_, '_, u8>) {
+        let len = tail.len();
+        let mut msg_chunk = Array::default();
+        msg_chunk[..len].copy_from_slice(tail.get_in());
+        self.decrypt_partial_block(InOut::from(&mut msg_chunk), len);
+        tail.get_out().copy_from_slice(&msg_chunk[..len]);
+    }
+
+    fn decrypt_partial_block(&mut self, block: InOut<'_, '_, Array<u8, Prod<D, U32>>>, len: usize) {
         // z0 = {}
         // z1 = {}
         // for i in 0..D:
         //     z0 = z0 || (V[6,i] ^ V[1,i] ^ (V[2,i] & V[3,i]))
         //     z1 = z1 || (V[2,i] ^ V[5,i] ^ (V[6,i] & V[7,i]))
 
-        // t0, t1 = Split(ZeroPad(cn, R), 128 * D)
+        // t0, t1 = Split(ci, R)
         // out0 = t0 ^ z0
         // out1 = t1 ^ z1
 
-        // xn = Truncate(out0 || out1, |cn|)
+        // Update(out0, out1)
+        // xi = out0 || out1
 
-        // v0, v1 = Split(ZeroPad(xn, R), 128 * D)
-        // Update(v0, v1)
-
-        // return xn
-
-        let mut block2 = zero_pad::<Prod<D, U32>>(block.get_in());
-        let blockbuf = InOut::from(&mut block2).into_buf();
-
-        let (mut chunks, _) = blockbuf.into_chunks::<U16>();
+        let mut blockbuf = block.into_buf();
+        let (mut chunks, _) = blockbuf.reborrow().into_chunks::<U16>();
 
         for i in 0..D::USIZE {
             let s = &self.0[i];
@@ -327,10 +337,65 @@ where
             chunks.get(i + D::USIZE).xor_in2out(&Array(z1.into_bytes()));
         }
 
+        blockbuf.get_out()[len..].fill(0);
+        let (mut chunks, _) = blockbuf.reborrow().into_chunks::<U16>();
+
         let t0 = Array::from_fn(|i| AesBlock::from_bytes(&chunks.get(i).get_out().0));
         let t1 = Array::from_fn(|i| AesBlock::from_bytes(&chunks.get(i + D::USIZE).get_out().0));
         self.update(t0, t1);
     }
+
+    // fn decrypt_partial(&mut self, block: InOutBuf<'_, '_, u8>) {
+    //     // // z0 = {}
+    //     // // z1 = {}
+    //     // // for i in 0..D:
+    //     // //     z0 = z0 || (V[6,i] ^ V[1,i] ^ (V[2,i] & V[3,i]))
+    //     // //     z1 = z1 || (V[2,i] ^ V[5,i] ^ (V[6,i] & V[7,i]))
+    //     // let z0 = self.0.clone().map(|s| s.6 ^ s.1 ^ (s.2 & s.3));
+    //     // let z1 = self.0.clone().map(|s| s.2 ^ s.5 ^ (s.6 & s.7));
+
+    //     // // t0, t1 = Split(ZeroPad(cn, R), 128 * D)
+    //     // let (t0, t1) = split::<D>(&zero_pad(block.get_in()));
+
+    //     // // out0 = t0 ^ z0
+    //     // // out1 = t1 ^ z1
+    //     // let out0 = Array::<Array<u8, U16>, D>::from_fn(|i| Array((t0[i] ^ z0[i]).into_bytes()));
+    //     // let out1 = Array::<Array<u8, U16>, D>::from_fn(|i| Array((t1[i] ^ z1[i]).into_bytes()));
+
+    //     // // xn = Truncate(out0 || out1, |cn|)
+    //     // // v0, v1 = Split(ZeroPad(xn, R), 128 * D)
+    //     // let mut xn = Array::default();
+    //     // xn[..16].copy_from_slice(&out0);
+    //     // xn[16..].copy_from_slice(&out1);
+    //     // xn[block.len()..].fill(0);
+
+    //     // // Update(v0, v1)
+    //     // let (v0, v1) = split::<D>(xn);
+    //     // self.update(v0, v1);
+
+    //     // return xn
+
+    //     let mut block2 = zero_pad::<Prod<D, U32>>(block.get_in());
+    //     let blockbuf = InOut::from(&mut block2).into_buf();
+
+    //     let (mut chunks, _) = blockbuf.into_chunks::<U16>();
+
+    //     for i in 0..D::USIZE {
+    //         let s = &self.0[i];
+
+    //         let z0 = s.6 ^ s.1 ^ (s.2 & s.3);
+    //         let z1 = s.2 ^ s.5 ^ (s.6 & s.7);
+
+    //         // hopefully this auto-vectorises and doesn't have to move z0 and z1 out
+    //         // of the simd registers.
+    //         chunks.get(i).xor_in2out(&Array(z0.into_bytes()));
+    //         chunks.get(i + D::USIZE).xor_in2out(&Array(z1.into_bytes()));
+    //     }
+
+    //     let t0 = Array::from_fn(|i| AesBlock::from_bytes(&chunks.get(i).get_out().0));
+    //     let t1 = Array::from_fn(|i| AesBlock::from_bytes(&chunks.get(i + D::USIZE).get_out().0));
+    //     self.update(t0, t1);
+    // }
 
     fn finalize(mut self, ad_len_bits: u64, msg_len_bits: u64) -> Array<u8, TagSize> {
         // t = {}
@@ -375,13 +440,8 @@ where
         D: Mul<U32>,
         Prod<D, U32>: ArraySize,
     {
-        let (chunks, tail) = Array::<u8, U16>::slice_as_chunks(ad);
-        assert!(tail.is_empty());
-
-        self.update(
-            Array::from_fn(|i| AesBlock::from_bytes(&chunks[i].0)),
-            Array::from_fn(|i| AesBlock::from_bytes(&chunks[i + D::USIZE].0)),
-        );
+        let (t0, t1) = split(ad);
+        self.update(t0, t1);
     }
 
     fn update(&mut self, m0: Array<AesBlock, D>, m1: Array<AesBlock, D>) {
@@ -419,6 +479,21 @@ where
 
         *self = out;
     }
+}
+
+fn split<D>(block: &Array<u8, Prod<D, U32>>) -> (Array<AesBlock, D>, Array<AesBlock, D>)
+where
+    D: ArraySize,
+    D: Mul<U32>,
+    Prod<D, U32>: ArraySize,
+{
+    let (chunks, tail) = Array::<u8, U16>::slice_as_chunks(&block);
+    assert!(tail.is_empty());
+
+    (
+        Array::from_fn(|i| AesBlock::from_bytes(&chunks[i].0)),
+        Array::from_fn(|i| AesBlock::from_bytes(&chunks[i + D::USIZE].0)),
+    )
 }
 
 #[derive(Clone, Copy)]
