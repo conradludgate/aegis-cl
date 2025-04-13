@@ -14,6 +14,80 @@ const C1: [u8; 16] = [
 
 #[cfg(all(target_arch = "aarch64", target_feature = "aes"))]
 mod aarch64 {
-    mod aegis128;
-    mod aegis256;
+    use std::arch::aarch64::*;
+    use std::ops::{BitAnd, BitXor, BitXorAssign};
+
+    #[derive(Clone, Copy)]
+    pub struct AesBlock(pub uint8x16_t);
+
+    impl Default for AesBlock {
+        fn default() -> Self {
+            Self(unsafe { vmovq_n_u8(0) })
+        }
+    }
+
+    impl AesBlock {
+        pub fn from_bytes(b: &[u8; 16]) -> Self {
+            // Safety: b has 16 bytes available. It does not need any special alignment.
+            Self(unsafe { vld1q_u8(b.as_ptr()) })
+        }
+
+        pub fn into_bytes(self) -> [u8; 16] {
+            let mut out = [0; 16];
+            unsafe { vst1q_u8(out.as_mut_ptr(), self.0) }
+            out
+        }
+
+        pub fn aes(self, key: Self) -> Self {
+            Self(unsafe { vaesmcq_u8(vaeseq_u8(self.0, vmovq_n_u8(0))) }) ^ key
+        }
+    }
+
+    impl BitXor for AesBlock {
+        type Output = Self;
+
+        fn bitxor(self, rhs: Self) -> Self::Output {
+            Self(unsafe { veorq_u8(self.0, rhs.0) })
+        }
+    }
+
+    impl BitXorAssign for AesBlock {
+        fn bitxor_assign(&mut self, rhs: Self) {
+            *self = *self ^ rhs;
+        }
+    }
+
+    impl BitAnd for AesBlock {
+        type Output = Self;
+
+        fn bitand(self, rhs: Self) -> Self::Output {
+            Self(unsafe { vandq_u8(self.0, rhs.0) })
+        }
+    }
+}
+
+mod aegis128;
+mod util;
+
+pub use aegis128::{Aegis128L, Aegis128X};
+
+#[cfg(test)]
+mod tests {
+    use hex_literal::hex;
+
+    use crate::aarch64::AesBlock;
+
+    /// <https://www.ietf.org/archive/id/draft-irtf-cfrg-aegis-aead-16.html#appendix-A.1>
+    #[test]
+    fn aes_round() {
+        // in   : 000102030405060708090a0b0c0d0e0f
+        // rk   : 101112131415161718191a1b1c1d1e1f
+        // out  : 7a7b4e5638782546a8c0477a3b813f43
+
+        let in_ = AesBlock::from_bytes(&hex!("000102030405060708090a0b0c0d0e0f"));
+        let rk = AesBlock::from_bytes(&hex!("101112131415161718191a1b1c1d1e1f"));
+        let out = hex!("7a7b4e5638782546a8c0477a3b813f43");
+
+        assert_eq!(in_.aes(rk).into_bytes(), out);
+    }
 }
