@@ -7,17 +7,13 @@ use digest::{
     block_buffer::{BlockBuffer, Eager},
     crypto_common::{Iv, IvSizeUser, KeyIvInit},
 };
-use hybrid_array::{
-    Array,
-    sizes::{U1, U16},
-};
+use hybrid_array::{Array, sizes::U16};
 use subtle::ConstantTimeEq;
 
 use crate::{AegisParallel, util};
 
 mod core;
 
-pub type Aegis128L<T> = Aegis128X<U1, T>;
 pub struct Aegis128X<D, T>(Array<u8, U16>, PhantomData<(D, T)>);
 
 impl<D, T> KeySizeUser for Aegis128X<D, T> {
@@ -217,7 +213,6 @@ fn core_decrypt_inout_detached<D: AegisParallel>(
     }
 }
 
-pub type AegisMac128L<T> = AegisMac128X<U1, T>;
 pub struct AegisMac128X<D: AegisParallel, T> {
     state: State128X<D>,
     blocks: BlockBuffer<D::Aegis128BlockSize, Eager>,
