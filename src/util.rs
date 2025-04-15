@@ -41,8 +41,9 @@ pub fn ctx<D: ArraySize>() -> Array<AesBlock, D> {
     })
 }
 
-pub fn zero_pad<N: ArraySize>(x: &[u8]) -> Array<u8, N> {
-    let mut y = Array::default();
-    y[..x.len()].copy_from_slice(x);
-    y
+pub fn bits(bytes: usize) -> aead::Result<u64> {
+    u64::try_from(bytes)
+        .ok()
+        .and_then(|b| b.checked_mul(8))
+        .ok_or(aead::Error)
 }

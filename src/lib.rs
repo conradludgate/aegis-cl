@@ -66,6 +66,26 @@ mod aarch64 {
     }
 }
 
+pub trait AegisParallel: hybrid_array::ArraySize {
+    type Aegis128BlockSize: hybrid_array::ArraySize;
+    type Aegis256BlockSize: hybrid_array::ArraySize;
+}
+
+impl AegisParallel for hybrid_array::sizes::U1 {
+    type Aegis128BlockSize = hybrid_array::sizes::U32;
+    type Aegis256BlockSize = hybrid_array::sizes::U16;
+}
+
+impl AegisParallel for hybrid_array::sizes::U2 {
+    type Aegis128BlockSize = hybrid_array::sizes::U64;
+    type Aegis256BlockSize = hybrid_array::sizes::U32;
+}
+
+impl AegisParallel for hybrid_array::sizes::U4 {
+    type Aegis128BlockSize = hybrid_array::sizes::U128;
+    type Aegis256BlockSize = hybrid_array::sizes::U64;
+}
+
 mod aegis128;
 mod util;
 

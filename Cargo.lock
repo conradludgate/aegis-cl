@@ -5,7 +5,7 @@ version = 4
 [[package]]
 name = "aead"
 version = "0.6.0-rc.0"
-source = "git+https://github.com/RustCrypto/traits/#6fbdc179756379c823a53c0d5a60e0a40baeb765"
+source = "git+https://github.com/RustCrypto/traits/#3620aba4f1e81e506b46a5f88c47f7ee3a7b87e0"
 dependencies = [
  "crypto-common",
  "inout",
@@ -16,18 +16,38 @@ name = "aegis-cl"
 version = "0.1.0"
 dependencies = [
  "aead",
+ "digest",
  "hex-literal",
  "hybrid-array",
  "subtle",
 ]
 
 [[package]]
+name = "block-buffer"
+version = "0.11.0-rc.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a229bfd78e4827c91b9b95784f69492c1b77c1ab75a45a8a037b139215086f94"
+dependencies = [
+ "hybrid-array",
+]
+
+[[package]]
 name = "crypto-common"
 version = "0.2.0-rc.2"
-source = "git+https://github.com/RustCrypto/traits/#6fbdc179756379c823a53c0d5a60e0a40baeb765"
+source = "git+https://github.com/RustCrypto/traits/#3620aba4f1e81e506b46a5f88c47f7ee3a7b87e0"
 dependencies = [
  "hybrid-array",
  "rand_core",
+]
+
+[[package]]
+name = "digest"
+version = "0.11.0-pre.10"
+source = "git+https://github.com/RustCrypto/traits/#3620aba4f1e81e506b46a5f88c47f7ee3a7b87e0"
+dependencies = [
+ "block-buffer",
+ "crypto-common",
+ "subtle",
 ]
 
 [[package]]
