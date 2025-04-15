@@ -89,7 +89,7 @@ impl AegisParallel for hybrid_array::sizes::U4 {
 mod aegis128;
 mod util;
 
-pub use aegis128::{Aegis128L, Aegis128X};
+pub use aegis128::{Aegis128L, Aegis128X, AegisMac128L, AegisMac128X};
 
 #[cfg(test)]
 mod tests {
