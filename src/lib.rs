@@ -43,6 +43,12 @@ mod arch {
 
     #[cfg(all(target_arch = "aarch64", target_feature = "aes"))]
     pub use aarch64::AesBlock;
+
+    #[cfg(target_arch = "x86_64")]
+    mod x86_64;
+
+    #[cfg(target_arch = "x86_64")]
+    pub use x86_64::AesBlock;
 }
 
 pub trait AegisParallel: hybrid_array::ArraySize {
