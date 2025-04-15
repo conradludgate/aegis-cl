@@ -5,7 +5,10 @@ use aead::{
     consts::U32,
     inout::{InOut, InOutBuf},
 };
-use hybrid_array::{Array, sizes::U16};
+use hybrid_array::{
+    Array,
+    sizes::{U1, U16},
+};
 
 #[derive(Clone, Copy)]
 pub struct State128X<D: AegisParallel>([D::AesBlock; 8]);
@@ -203,36 +206,43 @@ impl<D: AegisParallel> State128X<D> {
             self.update(t, t);
         }
 
-        if D::USIZE > 1 {
+        let v = if D::USIZE > 1 {
             //     for i in 0..D: # tag from state 0 is included
             //         ti = V[0,i] ^ V[1,i] ^ V[2,i] ^ V[3,i] ^ V[4,i] ^ V[5,i] ^ V[6,i]
             //         tags = tags || ti
             let tags = self.fold_tag128();
 
             // # Absorb tags into state 0; other states are not used anymore
+            let mut v = State128X::<U1>(self.0.map(|s| s[0]));
+
             // for v in Split(tags, 256):
             //     x0, x1 = Split(v, 128)
             //     Absorb(ZeroPad(x0, R / 2) || ZeroPad(x1, R / 2))
             for i in 0..D::USIZE / 2 {
                 let x0 = tags[2 * i];
                 let x1 = tags[2 * i + 1];
-                self.update(zeropad::<D>(x0), zeropad::<D>(x1));
+                v.update(x0, x1);
             }
 
             // u = LE64(D) || LE64(tag_len_bits)
             let u = concatu64(D::U64, 128);
 
             // t = ZeroPad(V[2,0] ^ u, R)
-            let t = zeropad::<D>(self[2][0] ^ u);
+            let t = v[2][0] ^ u;
 
             // Repeat(7, Update(t, t))
             for _ in 0..7 {
-                self.update(t, t);
+                v.update(t, t);
             }
-        }
+
+            v
+        } else {
+            // should be a noop.
+            State128X::<U1>(self.0.map(|s| s[0]))
+        };
 
         //     tag = V[0,0] ^ V[1,0] ^ V[2,0] ^ V[3,0] ^ V[4,0] ^ V[5,0] ^ V[6,0]
-        self.fold_tag128()[0].into_array()
+        v.fold_tag128()[0].into_array()
     }
 
     pub fn finalize256(mut self, ad_len_bits: u64, msg_len_bits: u64) -> Array<u8, U32> {
@@ -276,7 +286,7 @@ impl<D: AegisParallel> State128X<D> {
             self.update(t, t);
         }
 
-        if D::USIZE > 1 {
+        let v = if D::USIZE > 1 {
             //     for i in 1..D: # tag from state 0 is skipped
             //         ti0 = V[0,i] ^ V[1,i] ^ V[2,i] ^ V[3,i]
             //         ti1 = V[4,i] ^ V[5,i] ^ V[6,i] ^ V[7,i]
@@ -284,31 +294,38 @@ impl<D: AegisParallel> State128X<D> {
             let [tags0, tags1] = self.fold_tag256();
 
             // # Absorb tags into state 0; other states are not used anymore
+            let mut v = State128X::<U1>(self.0.map(|s| s[0]));
+
             // for v in Split(tags, 256):
             //     x0, x1 = Split(v, 128)
             //     Absorb(ZeroPad(x0, R / 2) || ZeroPad(x1, R / 2))
             for i in 0..D::USIZE {
                 let x0 = tags0[i];
                 let x1 = tags1[i];
-                self.update(zeropad::<D>(x0), zeropad::<D>(x1));
+                v.update(x0, x1);
             }
 
             // u = LE64(D) || LE64(tag_len_bits)
             let u = concatu64(D::U64, 256);
 
             // t = ZeroPad(V[2,0] ^ u, R)
-            let t = zeropad::<D>(self[2][0] ^ u);
+            let t = v[2][0] ^ u;
 
             // Repeat(7, Update(t, t))
             for _ in 0..7 {
-                self.update(t, t);
+                v.update(t, t);
             }
-        }
+
+            v
+        } else {
+            // should be a noop.
+            State128X::<U1>(self.0.map(|s| s[0]))
+        };
 
         //     t0 = V[0,0] ^ V[1,0] ^ V[2,0] ^ V[3,0]
         //     t1 = V[4,0] ^ V[5,0] ^ V[6,0] ^ V[7,0]
         //     tag = t0 || t1
-        let [t0, t1] = self.fold_tag256();
+        let [t0, t1] = v.fold_tag256();
         let t0 = t0[0];
         let t1 = t1[0];
         t0.into_array().concat(t1.into_array())
@@ -364,12 +381,6 @@ fn concatu64(x: u64, y: u64) -> AesBlock {
     u[..8].copy_from_slice(&x.to_le_bytes());
     u[8..].copy_from_slice(&y.to_le_bytes());
     AesBlock::from_bytes(&u)
-}
-
-fn zeropad<D: AegisParallel>(x: AesBlock) -> D::AesBlock {
-    let mut t = D::AesBlock::default();
-    t[0] = x;
-    t
 }
 
 impl<D: AegisParallel> State128X<D> {
