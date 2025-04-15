@@ -1,8 +1,9 @@
 use crate::{AegisParallel, C0, C1, aarch64::AesBlock, util::ctx};
-use aead::inout::{InOut, InOutBuf};
+use aead::{
+    consts::U32,
+    inout::{InOut, InOutBuf},
+};
 use hybrid_array::{Array, sizes::U16};
-
-use super::TagSize;
 
 #[derive(Clone)]
 pub struct State128X<D: AegisParallel>(Array<State128L, D>);
@@ -95,8 +96,8 @@ impl<D: AegisParallel> State128X<D> {
 
             // hopefully this auto-vectorises and doesn't have to move z0 and z1 out
             // of the simd registers.
-            chunks.get(i).xor_in2out(&Array(z0.into_bytes()));
-            chunks.get(i + D::USIZE).xor_in2out(&Array(z1.into_bytes()));
+            chunks.get(i).xor_in2out(&z0.into_array());
+            chunks.get(i + D::USIZE).xor_in2out(&z1.into_array());
         }
 
         self.update(t0, t1);
@@ -128,8 +129,8 @@ impl<D: AegisParallel> State128X<D> {
 
             // hopefully this auto-vectorises and doesn't have to move z0 and z1 out
             // of the simd registers.
-            chunks.get(i).xor_in2out(&Array(z0.into_bytes()));
-            chunks.get(i + D::USIZE).xor_in2out(&Array(z1.into_bytes()));
+            chunks.get(i).xor_in2out(&z0.into_array());
+            chunks.get(i + D::USIZE).xor_in2out(&z1.into_array());
         }
 
         let t0 = Array::from_fn(|i| AesBlock::from_bytes(&chunks.get(i).get_out().0));
@@ -174,8 +175,8 @@ impl<D: AegisParallel> State128X<D> {
 
             // hopefully this auto-vectorises and doesn't have to move z0 and z1 out
             // of the simd registers.
-            chunks.get(i).xor_in2out(&Array(z0.into_bytes()));
-            chunks.get(i + D::USIZE).xor_in2out(&Array(z1.into_bytes()));
+            chunks.get(i).xor_in2out(&z0.into_array());
+            chunks.get(i + D::USIZE).xor_in2out(&z1.into_array());
         }
 
         blockbuf.get_out()[len..].fill(0);
@@ -186,7 +187,7 @@ impl<D: AegisParallel> State128X<D> {
         self.update(t0, t1);
     }
 
-    pub fn finalize(mut self, ad_len_bits: u64, msg_len_bits: u64) -> Array<u8, TagSize> {
+    pub fn finalize128(mut self, ad_len_bits: u64, msg_len_bits: u64) -> Array<u8, U16> {
         // t = {}
         // u = LE64(ad_len_bits) || LE64(msg_len_bits)
         let u = concatu64(ad_len_bits, msg_len_bits);
@@ -200,7 +201,6 @@ impl<D: AegisParallel> State128X<D> {
             self.update(t.clone(), t.clone());
         }
 
-        // if tag_len_bits == 128:
         //     tag = ZeroPad({}, 128)
         //     for i in 0..D:
         //         ti = V[0,i] ^ V[1,i] ^ V[2,i] ^ V[3,i] ^ V[4,i] ^ V[5,i] ^ V[6,i]
@@ -208,23 +208,15 @@ impl<D: AegisParallel> State128X<D> {
         let tag = self
             .0
             .into_iter()
-            .fold(AesBlock::default(), |tag, s| tag ^ s.fold_tag());
+            .fold(AesBlock::default(), |tag, s| tag ^ s.fold_tag128());
 
-        Array(tag.into_bytes())
-
-        // else:            # 256 bits
-        //     ti0 = ZeroPad({}, 128)
-        //     ti1 = ZeroPad({}, 128)
-        //     for i in 0..D:
-        //         ti0 = ti0 ^ V[0,i] ^ V[1,i] ^ V[2,i] ^ V[3,i]
-        //         ti1 = ti1 ^ V[4,i] ^ V[5,i] ^ V[6,i] ^ V[7,i]
-        //     tag = ti0 || ti1
+        tag.into_array()
     }
 
-    pub fn finalize_mac(mut self, data_len_bits: u64, tag_len_bits: u64) -> Array<u8, TagSize> {
+    pub fn finalize_mac128(mut self, data_len_bits: u64) -> Array<u8, U16> {
         // t = {}
         // u = LE64(data_len_bits) || LE64(tag_len_bits)
-        let u = concatu64(data_len_bits, tag_len_bits);
+        let u = concatu64(data_len_bits, 128);
 
         // for i in 0..D:
         //     t = t || (V[2,i] ^ u)
@@ -242,17 +234,10 @@ impl<D: AegisParallel> State128X<D> {
                 t
             }
 
-            // if tag_len_bits == 128:
             //     for i in 0..D: # tag from state 0 is included
             //         ti = V[0,i] ^ V[1,i] ^ V[2,i] ^ V[3,i] ^ V[4,i] ^ V[5,i] ^ V[6,i]
             //         tags = tags || ti
-            // else:              # 256 bits
-            //     for i in 1..D: # tag from state 0 is skipped
-            //         ti0 = V[0,i] ^ V[1,i] ^ V[2,i] ^ V[3,i]
-            //         ti1 = V[4,i] ^ V[5,i] ^ V[6,i] ^ V[7,i]
-            //         tags = tags || (ti0 || ti1)
-            // TODO: support 256 bit tags
-            let tags = self.0.clone().map(|s| s.fold_tag());
+            let tags = self.0.clone().map(|s| s.fold_tag128());
 
             // # Absorb tags into state 0; other states are not used anymore
             // for v in Split(tags, 256):
@@ -269,7 +254,7 @@ impl<D: AegisParallel> State128X<D> {
             }
 
             // u = LE64(D) || LE64(tag_len_bits)
-            let u = concatu64(D::U64, tag_len_bits);
+            let u = concatu64(D::U64, 128);
 
             // t = ZeroPad(V[2,0] ^ u, R)
             let t = zeropad(self.0[0].2 ^ u);
@@ -280,16 +265,95 @@ impl<D: AegisParallel> State128X<D> {
             }
         }
 
-        // if tag_len_bits == 128:
         //     tag = V[0,0] ^ V[1,0] ^ V[2,0] ^ V[3,0] ^ V[4,0] ^ V[5,0] ^ V[6,0]
-        // else:            # 256 bits
+        let tag = self.0[0].fold_tag128();
+
+        tag.into_array()
+    }
+
+    pub fn finalize256(mut self, ad_len_bits: u64, msg_len_bits: u64) -> Array<u8, U32> {
+        // t = {}
+        // u = LE64(ad_len_bits) || LE64(msg_len_bits)
+        let u = concatu64(ad_len_bits, msg_len_bits);
+
+        // for i in 0..D:
+        //     t = t || (V[2,i] ^ u)
+        let t = Array::from_fn(|i| self.0[i].2 ^ u);
+
+        // Repeat(7, Update(t, t))
+        for _ in 0..7 {
+            self.update(t.clone(), t.clone());
+        }
+
+        //     ti0 = ZeroPad({}, 128)
+        //     ti1 = ZeroPad({}, 128)
+        //     for i in 0..D:
+        //         ti0 = ti0 ^ V[0,i] ^ V[1,i] ^ V[2,i] ^ V[3,i]
+        //         ti1 = ti1 ^ V[4,i] ^ V[5,i] ^ V[6,i] ^ V[7,i]
+        let [ti0, ti1] = self.0.into_iter().fold(
+            [AesBlock::default(), AesBlock::default()],
+            |[ti0, ti1], s| {
+                let [a, b] = s.fold_tag256();
+                [ti0 ^ a, ti1 ^ b]
+            },
+        );
+
+        //     tag = ti0 || ti1
+        ti0.into_array().concat(ti1.into_array())
+    }
+
+    pub fn finalize_mac256(mut self, data_len_bits: u64) -> Array<u8, U32> {
+        // t = {}
+        // u = LE64(data_len_bits) || LE64(tag_len_bits)
+        let u = concatu64(data_len_bits, 256);
+
+        // for i in 0..D:
+        //     t = t || (V[2,i] ^ u)
+        let t = Array::from_fn(|i| self.0[i].2 ^ u);
+
+        // Repeat(7, Update(t, t))
+        for _ in 0..7 {
+            self.update(t.clone(), t.clone());
+        }
+
+        if D::USIZE > 1 {
+            fn zeropad<D: AegisParallel>(x: AesBlock) -> Array<AesBlock, D> {
+                let mut t = Array::default();
+                t[0] = x;
+                t
+            }
+
+            //     for i in 1..D: # tag from state 0 is skipped
+            //         ti0 = V[0,i] ^ V[1,i] ^ V[2,i] ^ V[3,i]
+            //         ti1 = V[4,i] ^ V[5,i] ^ V[6,i] ^ V[7,i]
+            //         tags = tags || (ti0 || ti1)
+            //
+            // # Absorb tags into state 0; other states are not used anymore
+            // for v in Split(tags, 256):
+            //     x0, x1 = Split(v, 128)
+            //     Absorb(ZeroPad(x0, R / 2) || ZeroPad(x1, R / 2))
+            for s in self.0.clone() {
+                let [x0, x1] = s.fold_tag256();
+                self.update(zeropad(x0), zeropad(x1));
+            }
+
+            // u = LE64(D) || LE64(tag_len_bits)
+            let u = concatu64(D::U64, 256);
+
+            // t = ZeroPad(V[2,0] ^ u, R)
+            let t = zeropad(self.0[0].2 ^ u);
+
+            // Repeat(7, Update(t, t))
+            for _ in 0..7 {
+                self.update(t.clone(), t.clone());
+            }
+        }
+
         //     t0 = V[0,0] ^ V[1,0] ^ V[2,0] ^ V[3,0]
         //     t1 = V[4,0] ^ V[5,0] ^ V[6,0] ^ V[7,0]
         //     tag = t0 || t1
-        // TODO: support 256 bit tags
-        let tag = self.0[0].fold_tag();
-
-        Array(tag.into_bytes())
+        let [t0, t1] = self.0[0].fold_tag256();
+        t0.into_array().concat(t1.into_array())
     }
 
     pub fn absorb(&mut self, ad: &Array<u8, D::Aegis128BlockSize>) {
@@ -367,8 +431,15 @@ struct State128L(
 );
 
 impl State128L {
-    fn fold_tag(self) -> AesBlock {
-        self.0 ^ self.1 ^ self.2 ^ self.3 ^ self.4 ^ self.5 ^ self.6 // not self.7?
+    fn fold_tag128(self) -> AesBlock {
+        self.0 ^ self.1 ^ self.2 ^ self.3 ^ self.4 ^ self.5 ^ self.6
+    }
+
+    fn fold_tag256(self) -> [AesBlock; 2] {
+        [
+            self.0 ^ self.1 ^ self.2 ^ self.3,
+            self.4 ^ self.5 ^ self.6 ^ self.7,
+        ]
     }
 }
 

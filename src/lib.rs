@@ -17,6 +17,9 @@ mod aarch64 {
     use std::arch::aarch64::*;
     use std::ops::{BitAnd, BitXor, BitXorAssign};
 
+    use aead::consts::U16;
+    use hybrid_array::Array;
+
     #[derive(Clone, Copy)]
     pub struct AesBlock(pub uint8x16_t);
 
@@ -36,6 +39,10 @@ mod aarch64 {
             let mut out = [0; 16];
             unsafe { vst1q_u8(out.as_mut_ptr(), self.0) }
             out
+        }
+
+        pub fn into_array(self) -> Array<u8, U16> {
+            Array(self.into_bytes())
         }
 
         pub fn aes(self, key: Self) -> Self {
@@ -65,6 +72,11 @@ mod aarch64 {
         }
     }
 }
+
+pub trait TagSize: hybrid_array::ArraySize {}
+
+impl TagSize for hybrid_array::sizes::U16 {}
+impl TagSize for hybrid_array::sizes::U32 {}
 
 pub trait AegisParallel: hybrid_array::ArraySize {
     type Aegis128BlockSize: hybrid_array::ArraySize;
