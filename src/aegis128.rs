@@ -21,6 +21,7 @@ impl<D, T> KeySizeUser for Aegis128X<D, T> {
 }
 
 impl<D, T> KeyInit for Aegis128X<D, T> {
+    #[inline(always)]
     fn new(key: &Key<Self>) -> Self {
         Self(*key, PhantomData)
     }

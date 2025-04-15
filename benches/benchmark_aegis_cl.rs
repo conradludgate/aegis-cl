@@ -1,3 +1,5 @@
+use std::hint::black_box;
+
 use aead::{
     AeadInOut, KeyInit,
     consts::{U16, U32},
@@ -7,6 +9,7 @@ use aegis_cl::{Aegis128L, Aegis128X2, Aegis128X4, AegisMac128L, AegisMac128X2, A
 use benchmark_simple::{Bench, Options};
 use digest::{Mac, crypto_common::KeyIvInit};
 
+#[inline(never)]
 fn test_aegis128l(m: &mut [u8]) {
     let key = [0u8; 16];
     let nonce = [0u8; 16];
@@ -16,6 +19,7 @@ fn test_aegis128l(m: &mut [u8]) {
         .unwrap();
 }
 
+#[inline(never)]
 fn test_aegis128x2(m: &mut [u8]) {
     let key = [0u8; 16];
     let nonce = [0u8; 16];
@@ -25,6 +29,7 @@ fn test_aegis128x2(m: &mut [u8]) {
         .unwrap();
 }
 
+#[inline(never)]
 fn test_aegis128x4(m: &mut [u8]) {
     let key = [0u8; 16];
     let nonce = [0u8; 16];
@@ -55,22 +60,28 @@ fn test_aegis128x4(m: &mut [u8]) {
 //     state.encrypt_inout_detached(&nonce.into(), &[], InOutBuf::from(m));
 // }
 
-fn test_aegis128l_mac(state: &AegisMac128L<U32>, m: &[u8]) {
-    let mut state = state.clone();
+#[inline(never)]
+fn test_aegis128l_mac(m: &[u8]) {
+    let key = [0; 16];
+    let mut state = AegisMac128L::<U32>::new(&key.into(), &[0u8; 16].into());
     state.update(m);
-    state.finalize();
+    black_box(state.finalize());
 }
 
-fn test_aegis128x2_mac(state: &AegisMac128X2<U32>, m: &[u8]) {
-    let mut state = state.clone();
+#[inline(never)]
+fn test_aegis128x2_mac(m: &[u8]) {
+    let key = [0; 16];
+    let mut state = AegisMac128X2::<U32>::new(&key.into(), &[0u8; 16].into());
     state.update(m);
-    state.finalize();
+    black_box(state.finalize());
 }
 
-fn test_aegis128x4_mac(state: &AegisMac128X4<U32>, m: &[u8]) {
-    let mut state = state.clone();
+#[inline(never)]
+fn test_aegis128x4_mac(m: &[u8]) {
+    let key = [0; 16];
+    let mut state = AegisMac128X4::<U32>::new(&key.into(), &[0u8; 16].into());
     state.update(m);
-    state.finalize();
+    black_box(state.finalize());
 }
 
 fn main() {
@@ -90,22 +101,19 @@ fn main() {
     println!("* MACs:");
     println!();
 
-    let state = AegisMac128X4::<U32>::new(&[0u8; 16].into(), &[0u8; 16].into());
-    let res = bench.run(options, || test_aegis128x4_mac(&state, &m));
+    let res = bench.run(options, || test_aegis128x4_mac(&m));
     println!(
         "aegis128x4-mac      : {}",
         res.throughput_bits(m.len() as _)
     );
 
-    let state = AegisMac128X2::<U32>::new(&[0u8; 16].into(), &[0u8; 16].into());
-    let res = bench.run(options, || test_aegis128x2_mac(&state, &m));
+    let res = bench.run(options, || test_aegis128x2_mac(&m));
     println!(
         "aegis128x2-mac      : {}",
         res.throughput_bits(m.len() as _)
     );
 
-    let state = AegisMac128L::<U32>::new(&[0u8; 16].into(), &[0u8; 16].into());
-    let res = bench.run(options, || test_aegis128l_mac(&state, &m));
+    let res = bench.run(options, || test_aegis128l_mac(&m));
     println!(
         "aegis128l-mac       : {}",
         res.throughput_bits(m.len() as _)

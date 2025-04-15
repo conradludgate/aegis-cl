@@ -15,14 +15,14 @@ impl AegisParallel for U1 {
     type AesBlock = AesBlock;
 
     #[inline(always)]
-    fn split_block128(a: Array<u8, Self::Aegis128BlockSize>) -> (Self::AesBlock, Self::AesBlock) {
-        let (a0, a1) = a.split::<U16>();
-        (AesBlock::from_bytes(&a0.0), AesBlock::from_bytes(&a1.0))
+    fn split_blocks(a: &Array<u8, Self::Aegis128BlockSize>) -> (Self::AesBlock, Self::AesBlock) {
+        let (a0, a1) = a.split_ref::<U16>();
+        (Self::from_block(a0), Self::from_block(a1))
     }
 
     #[inline(always)]
-    fn split_block256(a: Array<u8, Self::Aegis256BlockSize>) -> Self::AesBlock {
-        AesBlock::from_bytes(&a.0)
+    fn from_block(a: &Array<u8, Self::Aegis256BlockSize>) -> Self::AesBlock {
+        AesBlock(unsafe { vld1q_u8(a.as_ptr()) })
     }
 }
 
@@ -33,30 +33,15 @@ impl AegisParallel for U2 {
     type AesBlock = AesBlock2;
 
     #[inline(always)]
-    fn split_block128(a: Array<u8, Self::Aegis128BlockSize>) -> (Self::AesBlock, Self::AesBlock) {
-        let (a0, a123) = a.split::<U16>();
-        let (a1, a23) = a123.split::<U16>();
-        let (a2, a3) = a23.split::<U16>();
-
-        (
-            AesBlock2::from(Array([
-                AesBlock::from_bytes(&a0.0),
-                AesBlock::from_bytes(&a1.0),
-            ])),
-            AesBlock2::from(Array([
-                AesBlock::from_bytes(&a2.0),
-                AesBlock::from_bytes(&a3.0),
-            ])),
-        )
+    fn split_blocks(a: &Array<u8, Self::Aegis128BlockSize>) -> (Self::AesBlock, Self::AesBlock) {
+        let (a01, a23) = a.split_ref::<U32>();
+        (Self::from_block(a01), Self::from_block(a23))
     }
 
     #[inline(always)]
-    fn split_block256(a: Array<u8, Self::Aegis256BlockSize>) -> Self::AesBlock {
-        let (a0, a1) = a.split::<U16>();
-        AesBlock2::from(Array([
-            AesBlock::from_bytes(&a0.0),
-            AesBlock::from_bytes(&a1.0),
-        ]))
+    fn from_block(a: &Array<u8, Self::Aegis256BlockSize>) -> Self::AesBlock {
+        // Safety: b has 16 bytes available. It does not need any special alignment.
+        AesBlock2(unsafe { vld1q_u8_x2(a.as_ptr()) })
     }
 }
 
@@ -67,43 +52,14 @@ impl AegisParallel for U4 {
     type AesBlock = AesBlock4;
 
     #[inline(always)]
-    fn split_block128(a: Array<u8, Self::Aegis128BlockSize>) -> (Self::AesBlock, Self::AesBlock) {
-        let (a03, a47) = a.split::<U64>();
-        let (a01, a23) = a03.split::<U32>();
-        let (a45, a67) = a47.split::<U32>();
-        let (a0, a1) = a01.split::<U16>();
-        let (a2, a3) = a23.split::<U16>();
-        let (a4, a5) = a45.split::<U16>();
-        let (a6, a7) = a67.split::<U16>();
-
-        (
-            AesBlock4::from(Array([
-                AesBlock::from_bytes(&a0.0),
-                AesBlock::from_bytes(&a1.0),
-                AesBlock::from_bytes(&a2.0),
-                AesBlock::from_bytes(&a3.0),
-            ])),
-            AesBlock4::from(Array([
-                AesBlock::from_bytes(&a4.0),
-                AesBlock::from_bytes(&a5.0),
-                AesBlock::from_bytes(&a6.0),
-                AesBlock::from_bytes(&a7.0),
-            ])),
-        )
+    fn split_blocks(a: &Array<u8, Self::Aegis128BlockSize>) -> (Self::AesBlock, Self::AesBlock) {
+        let (a03, a47) = a.split_ref::<U64>();
+        (Self::from_block(a03), Self::from_block(a47))
     }
 
     #[inline(always)]
-    fn split_block256(a: Array<u8, Self::Aegis256BlockSize>) -> Self::AesBlock {
-        let (a0, a123) = a.split::<U16>();
-        let (a1, a23) = a123.split::<U16>();
-        let (a2, a3) = a23.split::<U16>();
-
-        AesBlock4::from(Array([
-            AesBlock::from_bytes(&a0.0),
-            AesBlock::from_bytes(&a1.0),
-            AesBlock::from_bytes(&a2.0),
-            AesBlock::from_bytes(&a3.0),
-        ]))
+    fn from_block(a: &Array<u8, Self::Aegis256BlockSize>) -> Self::AesBlock {
+        AesBlock4(unsafe { vld1q_u8_x4(a.as_ptr()) })
     }
 }
 
@@ -124,11 +80,11 @@ impl Default for AesBlock {
 }
 
 impl AesBlock {
-    #[inline(always)]
-    pub fn from_bytes(b: &[u8; 16]) -> Self {
-        // Safety: b has 16 bytes available. It does not need any special alignment.
-        Self(unsafe { vld1q_u8(b.as_ptr()) })
-    }
+    // #[inline(always)]
+    // pub fn from_bytes(b: &[u8; 16]) -> Self {
+    //     // Safety: b has 16 bytes available. It does not need any special alignment.
+    //     Self(unsafe { vld1q_u8(b.as_ptr()) })
+    // }
 
     #[inline(always)]
     fn into_bytes(self) -> [u8; 16] {
@@ -161,6 +117,7 @@ impl IndexMut<usize> for AesBlock {
 }
 
 impl From<Array<AesBlock, U1>> for AesBlock {
+    #[inline(always)]
     fn from(value: Array<AesBlock, U1>) -> Self {
         let Array([AesBlock(a)]) = value;
         AesBlock(a)
@@ -173,6 +130,11 @@ impl IAesBlock for AesBlock {
     #[inline(always)]
     fn aes(self, key: Self) -> Self {
         Self(unsafe { vaesmcq_u8(vaeseq_u8(self.0, vmovq_n_u8(0))) }) ^ key
+    }
+
+    #[inline(always)]
+    fn xor3(self, mid: Self, rhs: Self) -> Self {
+        Self(unsafe { veor3q_u8(self.0, mid.0, rhs.0) })
     }
 
     #[inline(always)]
@@ -212,6 +174,7 @@ impl BitAnd for AesBlock {
 }
 
 impl Default for AesBlock2 {
+    #[inline(always)]
     fn default() -> Self {
         Self::from(Array([AesBlock::default(), AesBlock::default()]))
     }
@@ -220,6 +183,7 @@ impl Default for AesBlock2 {
 impl Index<usize> for AesBlock2 {
     type Output = AesBlock;
 
+    #[inline(always)]
     fn index(&self, index: usize) -> &Self::Output {
         match index {
             // same repr.
@@ -231,6 +195,7 @@ impl Index<usize> for AesBlock2 {
 }
 
 impl IndexMut<usize> for AesBlock2 {
+    #[inline(always)]
     fn index_mut(&mut self, index: usize) -> &mut Self::Output {
         match index {
             // same repr.
@@ -242,6 +207,7 @@ impl IndexMut<usize> for AesBlock2 {
 }
 
 impl From<AesBlock> for AesBlock2 {
+    #[inline(always)]
     fn from(value: AesBlock) -> Self {
         let AesBlock(a) = value;
         Self(uint8x16x2_t(a, a))
@@ -249,6 +215,7 @@ impl From<AesBlock> for AesBlock2 {
 }
 
 impl From<Array<AesBlock, U2>> for AesBlock2 {
+    #[inline(always)]
     fn from(value: Array<AesBlock, U2>) -> Self {
         let Array([AesBlock(a), AesBlock(b)]) = value;
         Self(uint8x16x2_t(a, b))
@@ -271,8 +238,17 @@ impl IAesBlock for AesBlock2 {
     }
 
     #[inline(always)]
+    fn xor3(self, mid: Self, rhs: Self) -> Self {
+        let Self(uint8x16x2_t(l0, l1)) = self;
+        let Self(uint8x16x2_t(m0, m1)) = mid;
+        let Self(uint8x16x2_t(r0, r1)) = rhs;
+        Self(unsafe { uint8x16x2_t(veor3q_u8(l0, m0, r0), veor3q_u8(l1, m1, r1)) })
+    }
+
+    #[inline(always)]
     fn fold_xor(self) -> AesBlock {
-        self[0] ^ self[1]
+        let Self(uint8x16x2_t(a, b)) = self;
+        unsafe { AesBlock(veorq_u8(a, b)) }
     }
 
     #[inline(always)]
@@ -311,6 +287,7 @@ impl BitAnd for AesBlock2 {
 }
 
 impl Default for AesBlock4 {
+    #[inline(always)]
     fn default() -> Self {
         Self::from(Array([
             AesBlock::default(),
@@ -352,6 +329,7 @@ impl IndexMut<usize> for AesBlock4 {
 }
 
 impl From<AesBlock> for AesBlock4 {
+    #[inline(always)]
     fn from(value: AesBlock) -> Self {
         let AesBlock(a) = value;
         Self(uint8x16x4_t(a, a, a, a))
@@ -359,6 +337,7 @@ impl From<AesBlock> for AesBlock4 {
 }
 
 impl From<Array<AesBlock, U4>> for AesBlock4 {
+    #[inline(always)]
     fn from(value: Array<AesBlock, U4>) -> Self {
         let Array([AesBlock(a), AesBlock(b), AesBlock(c), AesBlock(d)]) = value;
         Self(uint8x16x4_t(a, b, c, d))
@@ -383,8 +362,24 @@ impl IAesBlock for AesBlock4 {
     }
 
     #[inline(always)]
+    fn xor3(self, mid: Self, rhs: Self) -> Self {
+        let Self(uint8x16x4_t(l0, l1, l2, l3)) = self;
+        let Self(uint8x16x4_t(m0, m1, m2, m3)) = mid;
+        let Self(uint8x16x4_t(r0, r1, r2, r3)) = rhs;
+        Self(unsafe {
+            uint8x16x4_t(
+                veor3q_u8(l0, m0, r0),
+                veor3q_u8(l1, m1, r1),
+                veor3q_u8(l2, m2, r2),
+                veor3q_u8(l3, m3, r3),
+            )
+        })
+    }
+
+    #[inline(always)]
     fn fold_xor(self) -> AesBlock {
-        self[0] ^ self[1] ^ self[2] ^ self[3]
+        let Self(uint8x16x4_t(a, b, c, d)) = self;
+        unsafe { AesBlock(veorq_u8(veor3q_u8(a, b, c), d)) }
     }
 
     #[inline(always)]

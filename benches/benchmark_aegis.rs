@@ -1,3 +1,5 @@
+use std::hint::black_box;
+
 use aegis::aegis128l::Aegis128L;
 use aegis::aegis256::Aegis256;
 
@@ -51,22 +53,25 @@ fn test_aegis256x4(m: &mut [u8]) {
     state.encrypt_in_place(m, &[]);
 }
 
-fn test_aegis128l_mac(state: &Aegis128LMac<32>, m: &[u8]) {
-    let mut state = state.clone();
+fn test_aegis128l_mac(m: &[u8]) {
+    let key = [0u8; 16];
+    let mut state = Aegis128LMac::<32>::new(&key);
     state.update(m);
-    state.finalize();
+    black_box(state.finalize());
 }
 
-fn test_aegis128x2_mac(state: &Aegis128X2Mac<32>, m: &[u8]) {
-    let mut state = state.clone();
+fn test_aegis128x2_mac(m: &[u8]) {
+    let key = [0u8; 16];
+    let mut state = Aegis128X2Mac::<32>::new(&key);
     state.update(m);
-    state.finalize();
+    black_box(state.finalize());
 }
 
-fn test_aegis128x4_mac(state: &Aegis128X4Mac<32>, m: &[u8]) {
-    let mut state = state.clone();
+fn test_aegis128x4_mac(m: &[u8]) {
+    let key = [0u8; 16];
+    let mut state = Aegis128X4Mac::<32>::new(&key);
     state.update(m);
-    state.finalize();
+    black_box(state.finalize());
 }
 
 fn main() {
@@ -86,22 +91,19 @@ fn main() {
     println!("* MACs:");
     println!();
 
-    let state = Aegis128X4Mac::<32>::new(&[0u8; 16]);
-    let res = bench.run(options, || test_aegis128x4_mac(&state, &m));
+    let res = bench.run(options, || test_aegis128x4_mac(&m));
     println!(
         "aegis128x4-mac      : {}",
         res.throughput_bits(m.len() as _)
     );
 
-    let state = Aegis128X2Mac::<32>::new(&[0u8; 16]);
-    let res = bench.run(options, || test_aegis128x2_mac(&state, &m));
+    let res = bench.run(options, || test_aegis128x2_mac(&m));
     println!(
         "aegis128x2-mac      : {}",
         res.throughput_bits(m.len() as _)
     );
 
-    let state = Aegis128LMac::<32>::new(&[0u8; 16]);
-    let res = bench.run(options, || test_aegis128l_mac(&state, &m));
+    let res = bench.run(options, || test_aegis128l_mac(&m));
     println!(
         "aegis128l-mac       : {}",
         res.throughput_bits(m.len() as _)

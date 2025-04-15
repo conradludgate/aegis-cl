@@ -1,7 +1,10 @@
-use aead::inout::{InOut, InOutBuf};
+use aead::{
+    consts::U1,
+    inout::{InOut, InOutBuf},
+};
 use hybrid_array::{Array, ArraySize};
 
-use crate::{AegisParallel, arch::AesBlock};
+use crate::AegisParallel;
 
 pub fn process_inout_chunks_padded<'in_, 'out, T: ArraySize>(
     buffer: InOutBuf<'in_, 'out, u8>,
@@ -34,10 +37,10 @@ pub fn process_chunks_padded<T: ArraySize>(data: &[u8], mut f: impl FnMut(&Array
 
 pub fn ctx<D: AegisParallel>() -> D::AesBlock {
     Array::from_fn(|i| {
-        let mut a = [0; 16];
+        let mut a = Array([0; 16]);
         a[0] = i as u8;
         a[1] = D::U8 - 1;
-        AesBlock::from_bytes(&a)
+        U1::from_block(&a)
     })
     .into()
 }

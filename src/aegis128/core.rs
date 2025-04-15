@@ -1,6 +1,6 @@
 use std::ops::{Index, IndexMut};
 
-use crate::{AegisParallel, C0, C1, arch::AesBlock, arch::IAesBlock, util::ctx};
+use crate::{AegisParallel, C0, C1, arch::IAesBlock, util::ctx};
 use aead::{
     consts::U32,
     inout::{InOut, InOutBuf},
@@ -28,12 +28,12 @@ impl<D: AegisParallel> IndexMut<usize> for State128X<D> {
 }
 
 impl<D: AegisParallel> State128X<D> {
-    #[inline]
+    #[inline(always)]
     pub fn new(key: &Array<u8, U16>, iv: &Array<u8, U16>) -> Self {
-        let key = D::AesBlock::from(AesBlock::from_bytes(&key.0));
-        let nonce = D::AesBlock::from(AesBlock::from_bytes(&iv.0));
-        let c0 = D::AesBlock::from(AesBlock::from_bytes(&C0));
-        let c1 = D::AesBlock::from(AesBlock::from_bytes(&C1));
+        let key = U1::from_block(key);
+        let nonce = U1::from_block(iv);
+        let c0 = U1::from_block(&C0);
+        let c1 = U1::from_block(&C1);
 
         // for i in 0..D:
         //     V[0,i] = key ^ nonce
@@ -44,20 +44,26 @@ impl<D: AegisParallel> State128X<D> {
         //     V[5,i] = key ^ C0
         //     V[6,i] = key ^ C1
         //     V[7,i] = key ^ C0
+        let kn = key ^ nonce;
+        let k0 = key ^ c0;
+        let k1 = key ^ c1;
         let mut v = Self([
-            key ^ nonce,
-            c1,
-            c0,
-            c1,
-            key ^ nonce,
-            key ^ c0,
-            key ^ c1,
-            key ^ c0,
+            D::AesBlock::from(kn),
+            D::AesBlock::from(c1),
+            D::AesBlock::from(c0),
+            D::AesBlock::from(c1),
+            D::AesBlock::from(kn),
+            D::AesBlock::from(k0),
+            D::AesBlock::from(k1),
+            D::AesBlock::from(k0),
         ]);
 
         // for i in 0..D:
         //     ctx[i] = ZeroPad(Byte(i) || Byte(D - 1), 128)
         let ctx = ctx::<D>();
+
+        let key = D::AesBlock::from(key);
+        let nonce = D::AesBlock::from(nonce);
 
         // Repeat(10,
         //     for i in 0..D:
@@ -87,8 +93,8 @@ impl<D: AegisParallel> State128X<D> {
         let z1 = v[2] ^ v[5] ^ (v[6] & v[7]);
 
         // t0, t1 = Split(xi, R)
-        let xi = block.get_in().clone();
-        let (t0, t1) = D::split_block128(xi);
+        let xi = block.get_in();
+        let (t0, t1) = D::split_blocks(xi);
 
         // out0 = t0 ^ z0
         // out1 = t1 ^ z1
@@ -115,8 +121,8 @@ impl<D: AegisParallel> State128X<D> {
         let z1 = v[2] ^ v[5] ^ (v[6] & v[7]);
 
         // t0, t1 = Split(ci, R)
-        let ci = block.get_in().clone();
-        let (t0, t1) = D::split_block128(ci);
+        let ci = block.get_in();
+        let (t0, t1) = D::split_blocks(ci);
 
         // out0 = t0 ^ z0
         // out1 = t1 ^ z1
@@ -155,8 +161,8 @@ impl<D: AegisParallel> State128X<D> {
         let z1 = v[2] ^ v[5] ^ (v[6] & v[7]);
 
         // t0, t1 = Split(ZeroPad(cn, R), 128 * D)
-        let cn = padded_block.get_in().clone();
-        let (t0, t1) = D::split_block128(cn);
+        let cn = padded_block.get_in();
+        let (t0, t1) = D::split_blocks(cn);
 
         // out0 = t0 ^ z0
         // out1 = t1 ^ z1
@@ -169,7 +175,7 @@ impl<D: AegisParallel> State128X<D> {
         xn[len..].fill(0);
 
         // v0, v1 = Split(ZeroPad(xn, R), 128 * D)
-        let (v0, v1) = D::split_block128(xn.clone());
+        let (v0, v1) = D::split_blocks(xn);
         v.update(v0, v1);
     }
 
@@ -335,14 +341,13 @@ impl<D: AegisParallel> State128X<D> {
     }
 
     pub fn absorb(&mut self, ad: &Array<u8, D::Aegis128BlockSize>) {
-        let (t0, t1) = D::split_block128(ad.clone());
+        let (t0, t1) = D::split_blocks(ad);
         self.update(t0, t1);
     }
 
     #[inline]
     fn update(&mut self, m0: D::AesBlock, m1: D::AesBlock) {
         let v = self;
-        let mut v_ = *v;
 
         // for i in 0..D:
         //     V'[0,i] = AESRound(V[7,i], V[0,i] ^ m0[i])
@@ -353,16 +358,30 @@ impl<D: AegisParallel> State128X<D> {
         //     V'[5,i] = AESRound(V[4,i], V[5,i])
         //     V'[6,i] = AESRound(V[5,i], V[6,i])
         //     V'[7,i] = AESRound(V[6,i], V[7,i])
-        v_[0] = v[7].aes(v[0] ^ m0);
-        v_[1] = v[0].aes(v[1]);
-        v_[2] = v[1].aes(v[2]);
-        v_[3] = v[2].aes(v[3]);
-        v_[4] = v[3].aes(v[4] ^ m1);
-        v_[5] = v[4].aes(v[5]);
-        v_[6] = v[5].aes(v[6]);
-        v_[7] = v[6].aes(v[7]);
+        let tmp = v[7];
+        v[7] = v[6].aes(v[7]);
+        v[6] = v[5].aes(v[6]);
+        v[5] = v[4].aes(v[5]);
+        v[4] = v[3].aes(v[4] ^ m1);
+        v[3] = v[2].aes(v[3]);
+        v[2] = v[1].aes(v[2]);
+        v[1] = v[0].aes(v[1]);
+        v[0] = tmp.aes(v[0] ^ m0);
+    }
 
-        *v = v_;
+    #[inline]
+    fn fold_tag128(self) -> D::AesBlock {
+        let a = self[0].xor3(self[1], self[2]);
+        let b = self[3].xor3(self[4], self[5]);
+        self[6].xor3(a, b)
+    }
+
+    #[inline]
+    fn fold_tag256(self) -> [D::AesBlock; 2] {
+        [
+            self[0].xor3(self[1], self[2]) ^ self[3],
+            self[4].xor3(self[5], self[6]) ^ self[7],
+        ]
     }
 }
 
@@ -382,26 +401,11 @@ fn write<D: AegisParallel>(
 }
 
 #[inline]
-fn concatu64(x: u64, y: u64) -> AesBlock {
-    let mut u = [0; 16];
+fn concatu64(x: u64, y: u64) -> <U1 as AegisParallel>::AesBlock {
+    let mut u = Array([0; 16]);
     u[..8].copy_from_slice(&x.to_le_bytes());
     u[8..].copy_from_slice(&y.to_le_bytes());
-    AesBlock::from_bytes(&u)
-}
-
-impl<D: AegisParallel> State128X<D> {
-    #[inline]
-    fn fold_tag128(self) -> D::AesBlock {
-        self[0] ^ self[1] ^ self[2] ^ self[3] ^ self[4] ^ self[5] ^ self[6]
-    }
-
-    #[inline]
-    fn fold_tag256(self) -> [D::AesBlock; 2] {
-        [
-            self[0] ^ self[1] ^ self[2] ^ self[3],
-            self[4] ^ self[5] ^ self[6] ^ self[7],
-        ]
-    }
+    U1::from_block(&u)
 }
 
 #[cfg(test)]
@@ -410,7 +414,7 @@ mod tests {
     use hex_literal::hex;
     use hybrid_array::Array;
 
-    use crate::arch::{AesBlock, IAesBlock};
+    use crate::{AegisParallel, arch::IAesBlock};
 
     use super::State128X;
 
@@ -419,18 +423,18 @@ mod tests {
     #[rustfmt::skip]
     fn update() {
         let mut s: State128X<U1> = State128X([
-            AesBlock::from_bytes(&hex!("9b7e60b24cc873ea894ecc07911049a3")),
-            AesBlock::from_bytes(&hex!("330be08f35300faa2ebf9a7b0d274658")),
-            AesBlock::from_bytes(&hex!("7bbd5bd2b049f7b9b515cf26fbe7756c")),
-            AesBlock::from_bytes(&hex!("c35a00f55ea86c3886ec5e928f87db18")),
-            AesBlock::from_bytes(&hex!("9ebccafce87cab446396c4334592c91f")),
-            AesBlock::from_bytes(&hex!("58d83e31f256371e60fc6bb257114601")),
-            AesBlock::from_bytes(&hex!("1639b56ea322c88568a176585bc915de")),
-            AesBlock::from_bytes(&hex!("640818ffb57dc0fbc2e72ae93457e39a")),
+            U1::from_block(&Array(hex!("9b7e60b24cc873ea894ecc07911049a3"))),
+            U1::from_block(&Array(hex!("330be08f35300faa2ebf9a7b0d274658"))),
+            U1::from_block(&Array(hex!("7bbd5bd2b049f7b9b515cf26fbe7756c"))),
+            U1::from_block(&Array(hex!("c35a00f55ea86c3886ec5e928f87db18"))),
+            U1::from_block(&Array(hex!("9ebccafce87cab446396c4334592c91f"))),
+            U1::from_block(&Array(hex!("58d83e31f256371e60fc6bb257114601"))),
+            U1::from_block(&Array(hex!("1639b56ea322c88568a176585bc915de"))),
+            U1::from_block(&Array(hex!("640818ffb57dc0fbc2e72ae93457e39a"))),
         ]);
 
-        let m0 = AesBlock::from_bytes(&hex!("033e6975b94816879e42917650955aa0"));
-        let m1 = AesBlock::from_bytes(&hex!("fcc1968a46b7e97861bd6e89af6aa55f"));
+        let m0 = U1::from_block(&Array(hex!("033e6975b94816879e42917650955aa0")));
+        let m1 = U1::from_block(&Array(hex!("fcc1968a46b7e97861bd6e89af6aa55f")));
 
         s.update(m0, m1);
 
