@@ -15,6 +15,16 @@ subtle = "2"
 [dev-dependencies]
 hex-literal = "1"
 aead = { version = "0.6.0-rc.0", git = "https://github.com/RustCrypto/traits/", features = ["alloc"] }
+benchmark-simple = "0.1.10"
+aegis = "0.9"
 
 [profile.release]
 opt-level = 3
+
+[[bench]]
+name = "benchmark_aegis"
+harness = false
+
+[[bench]]
+name = "benchmark_aegis_cl"
+harness = false
