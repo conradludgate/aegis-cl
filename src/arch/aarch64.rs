@@ -14,11 +14,13 @@ impl AegisParallel for U1 {
 
     type AesBlock = AesBlock;
 
+    #[inline(always)]
     fn split_block128(a: Array<u8, Self::Aegis128BlockSize>) -> (Self::AesBlock, Self::AesBlock) {
         let (a0, a1) = a.split::<U16>();
         (AesBlock::from_bytes(&a0.0), AesBlock::from_bytes(&a1.0))
     }
 
+    #[inline(always)]
     fn split_block256(a: Array<u8, Self::Aegis256BlockSize>) -> Self::AesBlock {
         AesBlock::from_bytes(&a.0)
     }
@@ -30,6 +32,7 @@ impl AegisParallel for U2 {
 
     type AesBlock = AesBlock2;
 
+    #[inline(always)]
     fn split_block128(a: Array<u8, Self::Aegis128BlockSize>) -> (Self::AesBlock, Self::AesBlock) {
         let (a0, a123) = a.split::<U16>();
         let (a1, a23) = a123.split::<U16>();
@@ -47,6 +50,7 @@ impl AegisParallel for U2 {
         )
     }
 
+    #[inline(always)]
     fn split_block256(a: Array<u8, Self::Aegis256BlockSize>) -> Self::AesBlock {
         let (a0, a1) = a.split::<U16>();
         AesBlock2::from(Array([
@@ -62,6 +66,7 @@ impl AegisParallel for U4 {
 
     type AesBlock = AesBlock4;
 
+    #[inline(always)]
     fn split_block128(a: Array<u8, Self::Aegis128BlockSize>) -> (Self::AesBlock, Self::AesBlock) {
         let (a03, a47) = a.split::<U64>();
         let (a01, a23) = a03.split::<U32>();
@@ -87,6 +92,7 @@ impl AegisParallel for U4 {
         )
     }
 
+    #[inline(always)]
     fn split_block256(a: Array<u8, Self::Aegis256BlockSize>) -> Self::AesBlock {
         let (a0, a123) = a.split::<U16>();
         let (a1, a23) = a123.split::<U16>();
@@ -111,17 +117,20 @@ pub struct AesBlock2(uint8x16x2_t);
 pub struct AesBlock4(uint8x16x4_t);
 
 impl Default for AesBlock {
+    #[inline(always)]
     fn default() -> Self {
         Self(unsafe { vmovq_n_u8(0) })
     }
 }
 
 impl AesBlock {
+    #[inline(always)]
     pub fn from_bytes(b: &[u8; 16]) -> Self {
         // Safety: b has 16 bytes available. It does not need any special alignment.
         Self(unsafe { vld1q_u8(b.as_ptr()) })
     }
 
+    #[inline(always)]
     fn into_bytes(self) -> [u8; 16] {
         let mut out = [0; 16];
         unsafe { vst1q_u8(out.as_mut_ptr(), self.0) }
@@ -132,6 +141,7 @@ impl AesBlock {
 impl Index<usize> for AesBlock {
     type Output = AesBlock;
 
+    #[inline(always)]
     fn index(&self, index: usize) -> &Self::Output {
         match index {
             0 => self,
@@ -141,6 +151,7 @@ impl Index<usize> for AesBlock {
 }
 
 impl IndexMut<usize> for AesBlock {
+    #[inline(always)]
     fn index_mut(&mut self, index: usize) -> &mut Self::Output {
         match index {
             0 => self,
@@ -159,14 +170,17 @@ impl From<Array<AesBlock, U1>> for AesBlock {
 impl IAesBlock for AesBlock {
     type Size = U16;
 
+    #[inline(always)]
     fn aes(self, key: Self) -> Self {
         Self(unsafe { vaesmcq_u8(vaeseq_u8(self.0, vmovq_n_u8(0))) }) ^ key
     }
 
+    #[inline(always)]
     fn fold_xor(self) -> AesBlock {
         self
     }
 
+    #[inline(always)]
     fn into_array(self) -> Array<u8, U16> {
         Array(self.into_bytes())
     }
@@ -175,12 +189,14 @@ impl IAesBlock for AesBlock {
 impl BitXor for AesBlock {
     type Output = Self;
 
+    #[inline(always)]
     fn bitxor(self, rhs: Self) -> Self::Output {
         Self(unsafe { veorq_u8(self.0, rhs.0) })
     }
 }
 
 impl BitXorAssign for AesBlock {
+    #[inline(always)]
     fn bitxor_assign(&mut self, rhs: Self) {
         *self = *self ^ rhs;
     }
@@ -189,6 +205,7 @@ impl BitXorAssign for AesBlock {
 impl BitAnd for AesBlock {
     type Output = Self;
 
+    #[inline(always)]
     fn bitand(self, rhs: Self) -> Self::Output {
         Self(unsafe { vandq_u8(self.0, rhs.0) })
     }
@@ -241,6 +258,7 @@ impl From<Array<AesBlock, U2>> for AesBlock2 {
 impl IAesBlock for AesBlock2 {
     type Size = U32;
 
+    #[inline(always)]
     fn aes(self, key: Self) -> Self {
         let Self(uint8x16x2_t(m0, m1)) = self;
 
@@ -252,10 +270,12 @@ impl IAesBlock for AesBlock2 {
         }) ^ key
     }
 
+    #[inline(always)]
     fn fold_xor(self) -> AesBlock {
         self[0] ^ self[1]
     }
 
+    #[inline(always)]
     fn into_array(self) -> Array<u8, U32> {
         self[0].into_array().concat(self[1].into_array())
     }
@@ -264,6 +284,7 @@ impl IAesBlock for AesBlock2 {
 impl BitXor for AesBlock2 {
     type Output = Self;
 
+    #[inline(always)]
     fn bitxor(self, rhs: Self) -> Self::Output {
         let Self(uint8x16x2_t(l0, l1)) = self;
         let Self(uint8x16x2_t(r0, r1)) = rhs;
@@ -272,6 +293,7 @@ impl BitXor for AesBlock2 {
 }
 
 impl BitXorAssign for AesBlock2 {
+    #[inline(always)]
     fn bitxor_assign(&mut self, rhs: Self) {
         *self = *self ^ rhs;
     }
@@ -280,6 +302,7 @@ impl BitXorAssign for AesBlock2 {
 impl BitAnd for AesBlock2 {
     type Output = Self;
 
+    #[inline(always)]
     fn bitand(self, rhs: Self) -> Self::Output {
         let Self(uint8x16x2_t(l0, l1)) = self;
         let Self(uint8x16x2_t(r0, r1)) = rhs;
@@ -301,6 +324,7 @@ impl Default for AesBlock4 {
 impl Index<usize> for AesBlock4 {
     type Output = AesBlock;
 
+    #[inline(always)]
     fn index(&self, index: usize) -> &Self::Output {
         match index {
             // same repr.
@@ -314,6 +338,7 @@ impl Index<usize> for AesBlock4 {
 }
 
 impl IndexMut<usize> for AesBlock4 {
+    #[inline(always)]
     fn index_mut(&mut self, index: usize) -> &mut Self::Output {
         match index {
             // same repr.
@@ -343,6 +368,7 @@ impl From<Array<AesBlock, U4>> for AesBlock4 {
 impl IAesBlock for AesBlock4 {
     type Size = U64;
 
+    #[inline(always)]
     fn aes(self, key: Self) -> Self {
         let Self(uint8x16x4_t(m0, m1, m2, m3)) = self;
 
@@ -356,10 +382,12 @@ impl IAesBlock for AesBlock4 {
         }) ^ key
     }
 
+    #[inline(always)]
     fn fold_xor(self) -> AesBlock {
         self[0] ^ self[1] ^ self[2] ^ self[3]
     }
 
+    #[inline(always)]
     fn into_array(self) -> Array<u8, U64> {
         self[0]
             .into_array()
@@ -371,6 +399,7 @@ impl IAesBlock for AesBlock4 {
 impl BitXor for AesBlock4 {
     type Output = Self;
 
+    #[inline(always)]
     fn bitxor(self, rhs: Self) -> Self::Output {
         let Self(uint8x16x4_t(l0, l1, l2, l3)) = self;
         let Self(uint8x16x4_t(r0, r1, r2, r3)) = rhs;
@@ -386,6 +415,7 @@ impl BitXor for AesBlock4 {
 }
 
 impl BitXorAssign for AesBlock4 {
+    #[inline(always)]
     fn bitxor_assign(&mut self, rhs: Self) {
         *self = *self ^ rhs;
     }
@@ -394,6 +424,7 @@ impl BitXorAssign for AesBlock4 {
 impl BitAnd for AesBlock4 {
     type Output = Self;
 
+    #[inline(always)]
     fn bitand(self, rhs: Self) -> Self::Output {
         let Self(uint8x16x4_t(l0, l1, l2, l3)) = self;
         let Self(uint8x16x4_t(r0, r1, r2, r3)) = rhs;

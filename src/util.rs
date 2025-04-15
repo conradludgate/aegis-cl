@@ -42,6 +42,7 @@ pub fn ctx<D: AegisParallel>() -> D::AesBlock {
     .into()
 }
 
+#[inline]
 pub fn bits(bytes: usize) -> aead::Result<u64> {
     u64::try_from(bytes)
         .ok()
