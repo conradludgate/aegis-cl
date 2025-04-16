@@ -1,5 +1,4 @@
 use std::arch::x86_64::*;
-use std::mem::{transmute, transmute_copy};
 use std::ops::{BitAnd, BitXor, BitXorAssign};
 
 use hybrid_array::Array;
@@ -49,14 +48,24 @@ impl From<AesBlock> for AesBlock2 {
 impl From<Array<AesBlock, U2>> for AesBlock2 {
     #[inline(always)]
     fn from(value: Array<AesBlock, U2>) -> Self {
-        unsafe { transmute(value) }
+        let Array([a, b]) = value;
+
+        unsafe {
+            let a = _mm256_zextsi128_si256(a.0);
+            let ab = _mm256_inserti64x2::<1>(a, b.0);
+            AesBlock2(ab)
+        }
     }
 }
 
 impl From<AesBlock2> for Array<AesBlock, U2> {
     #[inline(always)]
     fn from(val: AesBlock2) -> Self {
-        unsafe { transmute(val) }
+        unsafe {
+            let a = AesBlock(_mm256_extracti128_si256::<0>(val.0));
+            let b = AesBlock(_mm256_extracti128_si256::<1>(val.0));
+            Array([a, b])
+        }
     }
 }
 

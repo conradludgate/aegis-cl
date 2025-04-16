@@ -1,5 +1,4 @@
 use std::arch::x86_64::*;
-use std::mem::transmute;
 use std::ops::{BitAnd, BitXor, BitXorAssign};
 
 use hybrid_array::Array;
@@ -49,14 +48,30 @@ impl From<AesBlock> for AesBlock4 {
 impl From<Array<AesBlock, U4>> for AesBlock4 {
     #[inline(always)]
     fn from(value: Array<AesBlock, U4>) -> Self {
-        unsafe { transmute(value) }
+        let Array([a, b, c, d]) = value;
+
+        unsafe {
+            let a = _mm512_zextsi128_si512(a.0);
+            let ab = _mm512_inserti64x2::<1>(a, b.0);
+            let abc = _mm512_inserti64x2::<2>(ab, c.0);
+            let abcd = _mm512_inserti64x2::<3>(abc, d.0);
+            AesBlock4(abcd)
+        }
     }
 }
 
 impl From<AesBlock4> for Array<AesBlock, U4> {
     #[inline(always)]
     fn from(val: AesBlock4) -> Self {
-        unsafe { transmute(val) }
+        unsafe {
+            let ab = _mm512_extracti64x4_epi64::<0>(val.0);
+            let cd = _mm512_extracti64x4_epi64::<1>(val.0);
+            let a = AesBlock(_mm256_extracti128_si256::<0>(ab));
+            let b = AesBlock(_mm256_extracti128_si256::<1>(ab));
+            let c = AesBlock(_mm256_extracti128_si256::<0>(cd));
+            let d = AesBlock(_mm256_extracti128_si256::<1>(cd));
+            Array([a, b, c, d])
+        }
     }
 }
 
