@@ -1,3 +1,5 @@
+#![feature(stdarch_x86_avx512)]
+
 // *  C0: an AES block built from the following bytes in hexadecimal
 // format: { 0x00, 0x01, 0x01, 0x02, 0x03, 0x05, 0x08, 0x0d, 0x15,
 // 0x22, 0x37, 0x59, 0x90, 0xe9, 0x79, 0x62 }.
@@ -12,15 +14,13 @@ const C1: Array<u8, hybrid_array::sizes::U16> = Array([
     0xdb, 0x3d, 0x18, 0x55, 0x6d, 0xc2, 0x2f, 0xf1, 0x20, 0x11, 0x31, 0x42, 0x73, 0xb5, 0x28, 0xdd,
 ]);
 
-mod aegis128;
-mod util;
+use std::ops::{Add, Sub};
 
-pub use aegis128::{Aegis128X, AegisMac128X};
 use hybrid_array::Array;
 
-mod arch {
+mod low {
     use hybrid_array::{Array, ArraySize};
-    use std::ops::{BitAnd, BitXor, BitXorAssign, IndexMut};
+    use std::ops::{BitAnd, BitXor, BitXorAssign};
 
     pub trait IAesBlock:
         Default
@@ -29,31 +29,40 @@ mod arch {
         + BitXor<Output = Self>
         + BitXorAssign
         + BitAnd<Output = Self>
-        + IndexMut<usize, Output = AesBlock>
     {
         type Size: ArraySize;
         fn aes(self, key: Self) -> Self;
         fn xor3(self, mid: Self, rhs: Self) -> Self;
         fn fold_xor(self) -> AesBlock;
         fn into_array(self) -> Array<u8, Self::Size>;
+        fn first(&self) -> AesBlock;
     }
 
-    #[cfg(all(target_arch = "aarch64", target_feature = "aes"))]
-    mod aarch64;
+    cfg_if::cfg_if! {
+        if #[cfg(all(target_arch = "aarch64", target_feature = "aes"))] {
+            mod aarch64;
+            pub use aarch64::AesBlock;
+        } else if #[cfg(all(target_arch = "x86_64", target_feature = "aes"))] {
+            mod x86_64;
+            pub use x86_64::AesBlock;
+        }
+    }
+}
 
-    #[cfg(all(target_arch = "aarch64", target_feature = "aes"))]
-    pub use aarch64::AesBlock;
+mod mid {
+    pub mod aegis128;
+    pub mod util;
+}
 
-    #[cfg(target_arch = "x86_64")]
-    mod x86_64;
-
-    #[cfg(target_arch = "x86_64")]
-    pub use x86_64::AesBlock;
+mod high {
+    pub mod aegis128;
 }
 
 pub trait AegisParallel: hybrid_array::ArraySize {
-    type Aegis128BlockSize: hybrid_array::ArraySize;
-    type Aegis256BlockSize: hybrid_array::ArraySize;
+    type Aegis128BlockSize: hybrid_array::ArraySize
+        + Sub<Self::Aegis256BlockSize, Output = Self::Aegis256BlockSize>;
+    type Aegis256BlockSize: hybrid_array::ArraySize
+        + Add<Self::Aegis256BlockSize, Output = Self::Aegis128BlockSize>;
 
     #[doc(hidden)]
     fn split_blocks(a: &Array<u8, Self::Aegis128BlockSize>) -> (Self::AesBlock, Self::AesBlock);
@@ -61,10 +70,12 @@ pub trait AegisParallel: hybrid_array::ArraySize {
     fn from_block(a: &Array<u8, Self::Aegis256BlockSize>) -> Self::AesBlock;
 
     #[doc(hidden)]
-    type AesBlock: arch::IAesBlock<Size = Self::Aegis256BlockSize>
-        + From<Array<arch::AesBlock, Self>>;
+    type AesBlock: low::IAesBlock<Size = Self::Aegis256BlockSize>
+        + From<Array<low::AesBlock, Self>>
+        + Into<Array<low::AesBlock, Self>>;
 }
 
+pub use high::aegis128::{Aegis128X, AegisMac128X};
 pub type Aegis128L<T> = Aegis128X<hybrid_array::sizes::U1, T>;
 pub type Aegis128X2<T> = Aegis128X<hybrid_array::sizes::U2, T>;
 pub type Aegis128X4<T> = Aegis128X<hybrid_array::sizes::U4, T>;
@@ -80,7 +91,7 @@ mod tests {
     use hybrid_array::Array;
 
     use crate::AegisParallel;
-    use crate::arch::IAesBlock;
+    use crate::low::IAesBlock;
 
     /// <https://www.ietf.org/archive/id/draft-irtf-cfrg-aegis-aead-16.html#appendix-A.1>
     #[test]

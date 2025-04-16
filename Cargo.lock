@@ -28,6 +28,7 @@ dependencies = [
  "aead",
  "aegis",
  "benchmark-simple",
+ "cfg-if",
  "digest",
  "hex-literal",
  "hybrid-array",

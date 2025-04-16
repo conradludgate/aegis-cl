@@ -1,5 +1,7 @@
 [target.aarch64-apple-darwin]
-rustflags = ["--cfg=aes_armv8", "-Ctarget-cpu=native"]
+rustflags = ["-Ctarget-cpu=native"]
+rustdocflags = ["-Ctarget-cpu=native"]
 
 [target.x86_64-unknown-linux-gnu]
-rustflags = ["-Ctarget-cpu=native"]
+rustflags = ["-Ctarget-cpu=native", "-Ctarget-feature=+avx2,+avx512f"]
+rustdocflags = ["-Ctarget-cpu=native", "-Ctarget-feature=+avx2,+avx512f"]

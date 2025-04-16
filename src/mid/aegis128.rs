@@ -1,6 +1,5 @@
 use std::ops::{Index, IndexMut};
 
-use crate::{AegisParallel, C0, C1, arch::IAesBlock, util::ctx};
 use aead::{
     consts::U32,
     inout::{InOut, InOutBuf},
@@ -8,6 +7,12 @@ use aead::{
 use hybrid_array::{
     Array,
     sizes::{U1, U16},
+};
+
+use super::util::ctx;
+use crate::{
+    AegisParallel, C0, C1,
+    low::{AesBlock, IAesBlock},
 };
 
 #[derive(Clone, Copy)]
@@ -219,10 +224,10 @@ impl<D: AegisParallel> State128X<D> {
             //     for i in 0..D: # tag from state 0 is included
             //         ti = V[0,i] ^ V[1,i] ^ V[2,i] ^ V[3,i] ^ V[4,i] ^ V[5,i] ^ V[6,i]
             //         tags = tags || ti
-            let tags = self.fold_tag128();
+            let tags: Array<AesBlock, D> = self.fold_tag128().into();
 
             // # Absorb tags into state 0; other states are not used anymore
-            let mut v = State128X::<U1>(self.0.map(|s| s[0]));
+            let mut v = State128X::<U1>(self.0.map(|s| s.first()));
 
             // for v in Split(tags, 256):
             //     x0, x1 = Split(v, 128)
@@ -237,7 +242,7 @@ impl<D: AegisParallel> State128X<D> {
             let u = concatu64(D::U64, 128);
 
             // t = ZeroPad(V[2,0] ^ u, R)
-            let t = v[2][0] ^ u;
+            let t = v[2].first() ^ u;
 
             // Repeat(7, Update(t, t))
             for _ in 0..7 {
@@ -247,11 +252,11 @@ impl<D: AegisParallel> State128X<D> {
             v
         } else {
             // should be a noop.
-            State128X::<U1>(self.0.map(|s| s[0]))
+            State128X::<U1>(self.0.map(|s| s.first()))
         };
 
         //     tag = V[0,0] ^ V[1,0] ^ V[2,0] ^ V[3,0] ^ V[4,0] ^ V[5,0] ^ V[6,0]
-        v.fold_tag128()[0].into_array()
+        v.fold_tag128().into_array()
     }
 
     pub fn finalize256(mut self, ad_len_bits: u64, msg_len_bits: u64) -> Array<u8, U32> {
@@ -301,9 +306,11 @@ impl<D: AegisParallel> State128X<D> {
             //         ti1 = V[4,i] ^ V[5,i] ^ V[6,i] ^ V[7,i]
             //         tags = tags || (ti0 || ti1)
             let [tags0, tags1] = self.fold_tag256();
+            let tags0: Array<AesBlock, D> = tags0.into();
+            let tags1: Array<AesBlock, D> = tags1.into();
 
             // # Absorb tags into state 0; other states are not used anymore
-            let mut v = State128X::<U1>(self.0.map(|s| s[0]));
+            let mut v = State128X::<U1>(self.0.map(|s| s.first()));
 
             // for v in Split(tags, 256):
             //     x0, x1 = Split(v, 128)
@@ -318,7 +325,7 @@ impl<D: AegisParallel> State128X<D> {
             let u = concatu64(D::U64, 256);
 
             // t = ZeroPad(V[2,0] ^ u, R)
-            let t = v[2][0] ^ u;
+            let t = v[2].first() ^ u;
 
             // Repeat(7, Update(t, t))
             for _ in 0..7 {
@@ -328,15 +335,13 @@ impl<D: AegisParallel> State128X<D> {
             v
         } else {
             // should be a noop.
-            State128X::<U1>(self.0.map(|s| s[0]))
+            State128X::<U1>(self.0.map(|s| s.first()))
         };
 
         //     t0 = V[0,0] ^ V[1,0] ^ V[2,0] ^ V[3,0]
         //     t1 = V[4,0] ^ V[5,0] ^ V[6,0] ^ V[7,0]
         //     tag = t0 || t1
         let [t0, t1] = v.fold_tag256();
-        let t0 = t0[0];
-        let t1 = t1[0];
         t0.into_array().concat(t1.into_array())
     }
 
@@ -362,11 +367,14 @@ impl<D: AegisParallel> State128X<D> {
         v[7] = v[6].aes(v[7]);
         v[6] = v[5].aes(v[6]);
         v[5] = v[4].aes(v[5]);
-        v[4] = v[3].aes(v[4] ^ m1);
+        v[4] = v[3].aes(v[4]);
         v[3] = v[2].aes(v[3]);
         v[2] = v[1].aes(v[2]);
         v[1] = v[0].aes(v[1]);
-        v[0] = tmp.aes(v[0] ^ m0);
+        v[0] = tmp.aes(v[0]);
+
+        v[4] ^= m1;
+        v[0] ^= m0;
     }
 
     #[inline]
@@ -391,13 +399,9 @@ fn write<D: AegisParallel>(
     b: D::AesBlock,
     out: &mut Array<u8, D::Aegis128BlockSize>,
 ) {
-    let (chunks, _) = Array::<u8, U16>::slice_as_chunks_mut(out);
-    for i in 0..D::USIZE {
-        chunks[i] = a[i].into_array();
-    }
-    for i in 0..D::USIZE {
-        chunks[i + D::USIZE] = b[i].into_array();
-    }
+    let (p0, p1) = out.split_ref_mut::<D::Aegis256BlockSize>();
+    *p0 = a.into_array();
+    *p1 = b.into_array();
 }
 
 #[inline]
@@ -410,11 +414,13 @@ fn concatu64(x: u64, y: u64) -> <U1 as AegisParallel>::AesBlock {
 
 #[cfg(test)]
 mod tests {
+    use std::mem::transmute;
+
     use aead::consts::{U1, U2, U4};
     use hex_literal::hex;
     use hybrid_array::Array;
 
-    use crate::{AegisParallel, arch::IAesBlock};
+    use crate::AegisParallel;
 
     use super::State128X;
 
@@ -438,14 +444,16 @@ mod tests {
 
         s.update(m0, m1);
 
-        assert_eq!(s[0].into_array().0, hex!("596ab773e4433ca0127c73f60536769d"));
-        assert_eq!(s[1].into_array().0, hex!("790394041a3d26ab697bde865014652d"));
-        assert_eq!(s[2].into_array().0, hex!("38cf49e4b65248acd533041b64dd0611"));
-        assert_eq!(s[3].into_array().0, hex!("16d8e58748f437bfff1797f780337cee"));
-        assert_eq!(s[4].into_array().0, hex!("9689ecdf08228c74d7e3360cca53d0a5"));
-        assert_eq!(s[5].into_array().0, hex!("a21746bb193a569e331e1aa985d0d729"));
-        assert_eq!(s[6].into_array().0, hex!("09d714e6fcf9177a8ed1cde7e3d259a6"));
-        assert_eq!(s[7].into_array().0, hex!("61279ba73167f0ab76f0a11bf203bdff"));
+        let s: [[u8; 16]; 8] = unsafe { transmute(s) };
+
+        assert_eq!(s[0], hex!("596ab773e4433ca0127c73f60536769d"));
+        assert_eq!(s[1], hex!("790394041a3d26ab697bde865014652d"));
+        assert_eq!(s[2], hex!("38cf49e4b65248acd533041b64dd0611"));
+        assert_eq!(s[3], hex!("16d8e58748f437bfff1797f780337cee"));
+        assert_eq!(s[4], hex!("9689ecdf08228c74d7e3360cca53d0a5"));
+        assert_eq!(s[5], hex!("a21746bb193a569e331e1aa985d0d729"));
+        assert_eq!(s[6], hex!("09d714e6fcf9177a8ed1cde7e3d259a6"));
+        assert_eq!(s[7], hex!("61279ba73167f0ab76f0a11bf203bdff"));
     }
 
     #[test]
@@ -456,30 +464,31 @@ mod tests {
         let nonce = Array(hex!("101112131415161718191a1b1c1d1e1f"));
 
         let v = State128X::<U2>::new(&key, &nonce);
+        let v: [[[u8; 16]; 2]; 8] = unsafe { transmute(v) };
 
-        assert_eq!(v[0][0].into_array().0, hex!("a4fc1ad9a72942fb88bd2cabbba6509a"));
-        assert_eq!(v[0][1].into_array().0, hex!("80a40e392fc71084209b6c3319bdc6cc"));
+        assert_eq!(v[0][0], hex!("a4fc1ad9a72942fb88bd2cabbba6509a"));
+        assert_eq!(v[0][1], hex!("80a40e392fc71084209b6c3319bdc6cc"));
 
-        assert_eq!(v[1][0].into_array().0, hex!("380f435cf801763b1f0c2a2f7212052d"));
-        assert_eq!(v[1][1].into_array().0, hex!("73796607b59b1b650ee91c152af1f18a"));
-        
-        assert_eq!(v[2][0].into_array().0, hex!("6ee1de433ea877fa33bc0782abff2dcb"));
-        assert_eq!(v[2][1].into_array().0, hex!("b9fab2ab496e16d1facaffd5453cbf14"));
-        
-        assert_eq!(v[3][0].into_array().0, hex!("85f94b0d4263bfa86fdf45a603d8b6ac"));
-        assert_eq!(v[3][1].into_array().0, hex!("90356c8cadbaa2c969001da02e3feca0"));
+        assert_eq!(v[1][0], hex!("380f435cf801763b1f0c2a2f7212052d"));
+        assert_eq!(v[1][1], hex!("73796607b59b1b650ee91c152af1f18a"));
 
-        assert_eq!(v[4][0].into_array().0, hex!("09bd69ad3730174bcd2ce9a27cd1357e"));
-        assert_eq!(v[4][1].into_array().0, hex!("e610b45125796a4fcf1708cef5c4f718"));
-        
-        assert_eq!(v[5][0].into_array().0, hex!("fcdeb0cf0a87bf442fc82383ddb0f6d6"));
-        assert_eq!(v[5][1].into_array().0, hex!("61ad32a4694d6f3cca313a2d3f4687aa"));
+        assert_eq!(v[2][0], hex!("6ee1de433ea877fa33bc0782abff2dcb"));
+        assert_eq!(v[2][1], hex!("b9fab2ab496e16d1facaffd5453cbf14"));
 
-        assert_eq!(v[6][0].into_array().0, hex!("571c207988659e2cdfbdaae77f4f37e3"));
-        assert_eq!(v[6][1].into_array().0, hex!("32e6094e217573bf91fb28c145a3efa8"));
-        
-        assert_eq!(v[7][0].into_array().0, hex!("ca549badf8faa58222412478598651cf"));
-        assert_eq!(v[7][1].into_array().0, hex!("3407279a54ce76d2e2e8a90ec5d108eb"));
+        assert_eq!(v[3][0], hex!("85f94b0d4263bfa86fdf45a603d8b6ac"));
+        assert_eq!(v[3][1], hex!("90356c8cadbaa2c969001da02e3feca0"));
+
+        assert_eq!(v[4][0], hex!("09bd69ad3730174bcd2ce9a27cd1357e"));
+        assert_eq!(v[4][1], hex!("e610b45125796a4fcf1708cef5c4f718"));
+
+        assert_eq!(v[5][0], hex!("fcdeb0cf0a87bf442fc82383ddb0f6d6"));
+        assert_eq!(v[5][1], hex!("61ad32a4694d6f3cca313a2d3f4687aa"));
+
+        assert_eq!(v[6][0], hex!("571c207988659e2cdfbdaae77f4f37e3"));
+        assert_eq!(v[6][1], hex!("32e6094e217573bf91fb28c145a3efa8"));
+
+        assert_eq!(v[7][0], hex!("ca549badf8faa58222412478598651cf"));
+        assert_eq!(v[7][1], hex!("3407279a54ce76d2e2e8a90ec5d108eb"));
     }
 
     #[test]
@@ -490,45 +499,46 @@ mod tests {
         let nonce = Array(hex!("101112131415161718191a1b1c1d1e1f"));
 
         let v = State128X::<U4>::new(&key, &nonce);
+        let v: [[[u8; 16]; 4]; 8] = unsafe { transmute(v) };
 
-        assert_eq!(v[0][0].into_array().0, hex!("924eb07635003a37e6c6575ba8ce1929"));
-        assert_eq!(v[0][1].into_array().0, hex!("c8b6a5d91475445e936d48e794be0ce2"));
-        assert_eq!(v[0][2].into_array().0, hex!("fcd37d050e24084befe3bbb219d64760"));
-        assert_eq!(v[0][3].into_array().0, hex!("2e9f58cfb893a8800220242c373a8b18"));
+        assert_eq!(v[0][0], hex!("924eb07635003a37e6c6575ba8ce1929"));
+        assert_eq!(v[0][1], hex!("c8b6a5d91475445e936d48e794be0ce2"));
+        assert_eq!(v[0][2], hex!("fcd37d050e24084befe3bbb219d64760"));
+        assert_eq!(v[0][3], hex!("2e9f58cfb893a8800220242c373a8b18"));
         
-        assert_eq!(v[1][0].into_array().0, hex!("1a1f60c4fab64e5471dc72edfcf6fe6b"));
-        assert_eq!(v[1][1].into_array().0, hex!("c1e525ebea2d6375a9edd045dce96381"));
-        assert_eq!(v[1][2].into_array().0, hex!("97a3e25abd228a44d4a14a6d3fe9185c"));
-        assert_eq!(v[1][3].into_array().0, hex!("c2d4cf7f4287a98744645674265d4ca8"));
+        assert_eq!(v[1][0], hex!("1a1f60c4fab64e5471dc72edfcf6fe6b"));
+        assert_eq!(v[1][1], hex!("c1e525ebea2d6375a9edd045dce96381"));
+        assert_eq!(v[1][2], hex!("97a3e25abd228a44d4a14a6d3fe9185c"));
+        assert_eq!(v[1][3], hex!("c2d4cf7f4287a98744645674265d4ca8"));
         
-        assert_eq!(v[2][0].into_array().0, hex!("7bb50c534f6ec4780530ff1cce8a16e8"));
-        assert_eq!(v[2][1].into_array().0, hex!("7b08d57557da0b5ef7b5f7d98b0ba189"));
-        assert_eq!(v[2][2].into_array().0, hex!("6bfcac34ddb68404821a4d665303cb0f"));
-        assert_eq!(v[2][3].into_array().0, hex!("d95626f6dfad1aed7467622c38529932"));
+        assert_eq!(v[2][0], hex!("7bb50c534f6ec4780530ff1cce8a16e8"));
+        assert_eq!(v[2][1], hex!("7b08d57557da0b5ef7b5f7d98b0ba189"));
+        assert_eq!(v[2][2], hex!("6bfcac34ddb68404821a4d665303cb0f"));
+        assert_eq!(v[2][3], hex!("d95626f6dfad1aed7467622c38529932"));
         
-        assert_eq!(v[3][0].into_array().0, hex!("af339fd2d50ee45fc47665c647cf6586"));
-        assert_eq!(v[3][1].into_array().0, hex!("d0669b39d140f0e118a4a511efe2f95a"));
-        assert_eq!(v[3][2].into_array().0, hex!("7a94330f35c194fadda2a87e42cdeccc"));
-        assert_eq!(v[3][3].into_array().0, hex!("233b640d1f4d56e2757e72c1a9d8ecb1"));
+        assert_eq!(v[3][0], hex!("af339fd2d50ee45fc47665c647cf6586"));
+        assert_eq!(v[3][1], hex!("d0669b39d140f0e118a4a511efe2f95a"));
+        assert_eq!(v[3][2], hex!("7a94330f35c194fadda2a87e42cdeccc"));
+        assert_eq!(v[3][3], hex!("233b640d1f4d56e2757e72c1a9d8ecb1"));
         
-        assert_eq!(v[4][0].into_array().0, hex!("9f93737d699ba05c11e94f2b201bef5e"));
-        assert_eq!(v[4][1].into_array().0, hex!("61caf387cf7cfd3f8300ac7680ccfd76"));
-        assert_eq!(v[4][2].into_array().0, hex!("5825a671ecef03b7a9c98a601ae32115"));
-        assert_eq!(v[4][3].into_array().0, hex!("87a1fe4d558161a8f4c38731f3223032"));
+        assert_eq!(v[4][0], hex!("9f93737d699ba05c11e94f2b201bef5e"));
+        assert_eq!(v[4][1], hex!("61caf387cf7cfd3f8300ac7680ccfd76"));
+        assert_eq!(v[4][2], hex!("5825a671ecef03b7a9c98a601ae32115"));
+        assert_eq!(v[4][3], hex!("87a1fe4d558161a8f4c38731f3223032"));
         
-        assert_eq!(v[5][0].into_array().0, hex!("7a5aca78d636c05bbc702b2980196ab6"));
-        assert_eq!(v[5][1].into_array().0, hex!("915d868408495d07eb527789f282c575"));
-        assert_eq!(v[5][2].into_array().0, hex!("d0947bfbc1d3309cdffc9be1503aea62"));
-        assert_eq!(v[5][3].into_array().0, hex!("8834ea57a15b9fbdc0245464a4b8cbef"));
+        assert_eq!(v[5][0], hex!("7a5aca78d636c05bbc702b2980196ab6"));
+        assert_eq!(v[5][1], hex!("915d868408495d07eb527789f282c575"));
+        assert_eq!(v[5][2], hex!("d0947bfbc1d3309cdffc9be1503aea62"));
+        assert_eq!(v[5][3], hex!("8834ea57a15b9fbdc0245464a4b8cbef"));
         
-        assert_eq!(v[6][0].into_array().0, hex!("e46f4cf71a95ac45b6f0823e3aba1a86"));
-        assert_eq!(v[6][1].into_array().0, hex!("8c4ecef682fc44a8eba911b3fc7d99f9"));
-        assert_eq!(v[6][2].into_array().0, hex!("a4fb61e2c928a2ca760b8772f2ea5f2e"));
-        assert_eq!(v[6][3].into_array().0, hex!("3d34ea89da73caa3016c280500a155a3"));
+        assert_eq!(v[6][0], hex!("e46f4cf71a95ac45b6f0823e3aba1a86"));
+        assert_eq!(v[6][1], hex!("8c4ecef682fc44a8eba911b3fc7d99f9"));
+        assert_eq!(v[6][2], hex!("a4fb61e2c928a2ca760b8772f2ea5f2e"));
+        assert_eq!(v[6][3], hex!("3d34ea89da73caa3016c280500a155a3"));
         
-        assert_eq!(v[7][0].into_array().0, hex!("85075f0080e9d618e7eb40f57c32d9f7"));
-        assert_eq!(v[7][1].into_array().0, hex!("d2ab2b320c6e93b155a3787cb83e5281"));
-        assert_eq!(v[7][2].into_array().0, hex!("0b3af0250ae36831a1b072e499929bcb"));
-        assert_eq!(v[7][3].into_array().0, hex!("5cce4d00329d69f1aae36aa541347512"));
+        assert_eq!(v[7][0], hex!("85075f0080e9d618e7eb40f57c32d9f7"));
+        assert_eq!(v[7][1], hex!("d2ab2b320c6e93b155a3787cb83e5281"));
+        assert_eq!(v[7][2], hex!("0b3af0250ae36831a1b072e499929bcb"));
+        assert_eq!(v[7][3], hex!("5cce4d00329d69f1aae36aa541347512"));
     }
 }

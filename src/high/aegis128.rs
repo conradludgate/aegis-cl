@@ -1,4 +1,3 @@
-use core::State128X;
 use std::marker::PhantomData;
 
 use aead::{AeadCore, AeadInOut, Key, KeyInit, KeySizeUser, Nonce, consts::U32, inout::InOutBuf};
@@ -10,9 +9,9 @@ use digest::{
 use hybrid_array::{Array, sizes::U16};
 use subtle::ConstantTimeEq;
 
-use crate::{AegisParallel, util};
-
-mod core;
+use crate::AegisParallel;
+use crate::mid::aegis128::State128X;
+use crate::mid::util;
 
 pub struct Aegis128X<D, T>(Array<u8, U16>, PhantomData<(D, T)>);
 
@@ -289,7 +288,8 @@ mod tests {
     use hybrid_array::sizes::{U1, U2, U4, U16};
     use hybrid_array::{Array, ArraySize};
 
-    use crate::{Aegis128X, AegisParallel, aegis128::AegisMac128X};
+    use super::AegisMac128X;
+    use crate::{Aegis128X, AegisParallel};
 
     fn test_roundtrip<D: AegisParallel, T: ArraySize>(
         key: Key<Aegis128X<D, T>>,
