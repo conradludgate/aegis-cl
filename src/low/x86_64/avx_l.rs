@@ -1,5 +1,4 @@
 use std::arch::x86_64::*;
-use std::mem::{transmute, transmute_copy};
 use std::ops::{BitAnd, BitXor, BitXorAssign};
 
 use hybrid_array::Array;
@@ -26,7 +25,7 @@ impl AegisParallel for U1 {
 
     #[inline(always)]
     fn from_block(a: &Array<u8, Self::Aegis256BlockSize>) -> Self::AesBlock {
-        AesBlock(unsafe { transmute_copy(a) })
+        AesBlock(unsafe { _mm_loadu_epi8(a.as_ptr().cast()) })
     }
 }
 
@@ -77,7 +76,9 @@ impl IAesBlock for AesBlock {
 
     #[inline(always)]
     fn into_array(self) -> Array<u8, U16> {
-        unsafe { transmute(self.0) }
+        let mut out = Array::<u8, U16>::default();
+        unsafe { _mm_storeu_epi8(out.as_mut_ptr().cast(), self.0) }
+        out
     }
 }
 
