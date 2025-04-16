@@ -1,4 +1,4 @@
-#![feature(stdarch_x86_avx512)]
+#![cfg_attr(target_arch="x86_64", feature(stdarch_x86_avx512))]
 
 // *  C0: an AES block built from the following bytes in hexadecimal
 // format: { 0x00, 0x01, 0x01, 0x02, 0x03, 0x05, 0x08, 0x0d, 0x15,

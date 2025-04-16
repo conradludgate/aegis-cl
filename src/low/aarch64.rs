@@ -1,5 +1,5 @@
 use std::arch::aarch64::*;
-use std::ops::{BitAnd, BitXor, BitXorAssign, Index, IndexMut};
+use std::ops::{BitAnd, BitXor, BitXorAssign};
 
 use hybrid_array::Array;
 use hybrid_array::sizes::{U1, U2, U4, U16, U32, U64, U128};
@@ -94,33 +94,17 @@ impl AesBlock {
     }
 }
 
-impl Index<usize> for AesBlock {
-    type Output = AesBlock;
-
-    #[inline(always)]
-    fn index(&self, index: usize) -> &Self::Output {
-        match index {
-            0 => self,
-            _ => unreachable!(),
-        }
-    }
-}
-
-impl IndexMut<usize> for AesBlock {
-    #[inline(always)]
-    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
-        match index {
-            0 => self,
-            _ => unreachable!(),
-        }
-    }
-}
-
 impl From<Array<AesBlock, U1>> for AesBlock {
     #[inline(always)]
     fn from(value: Array<AesBlock, U1>) -> Self {
         let Array([AesBlock(a)]) = value;
         AesBlock(a)
+    }
+}
+
+impl From<AesBlock> for Array<AesBlock, U1> {
+    fn from(value: AesBlock) -> Self {
+        Array([value])
     }
 }
 
@@ -135,6 +119,11 @@ impl IAesBlock for AesBlock {
     #[inline(always)]
     fn xor3(self, mid: Self, rhs: Self) -> Self {
         Self(unsafe { veor3q_u8(self.0, mid.0, rhs.0) })
+    }
+
+    #[inline(always)]
+    fn first(&self) -> AesBlock {
+        *self
     }
 
     #[inline(always)]
@@ -180,32 +169,6 @@ impl Default for AesBlock2 {
     }
 }
 
-impl Index<usize> for AesBlock2 {
-    type Output = AesBlock;
-
-    #[inline(always)]
-    fn index(&self, index: usize) -> &Self::Output {
-        match index {
-            // same repr.
-            0 => unsafe { std::mem::transmute(&self.0.0) },
-            1 => unsafe { std::mem::transmute(&self.0.1) },
-            _ => unreachable!(),
-        }
-    }
-}
-
-impl IndexMut<usize> for AesBlock2 {
-    #[inline(always)]
-    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
-        match index {
-            // same repr.
-            0 => unsafe { std::mem::transmute(&mut self.0.0) },
-            1 => unsafe { std::mem::transmute(&mut self.0.1) },
-            _ => unreachable!(),
-        }
-    }
-}
-
 impl From<AesBlock> for AesBlock2 {
     #[inline(always)]
     fn from(value: AesBlock) -> Self {
@@ -219,6 +182,12 @@ impl From<Array<AesBlock, U2>> for AesBlock2 {
     fn from(value: Array<AesBlock, U2>) -> Self {
         let Array([AesBlock(a), AesBlock(b)]) = value;
         Self(uint8x16x2_t(a, b))
+    }
+}
+
+impl From<AesBlock2> for Array<AesBlock, U2> {
+    fn from(value: AesBlock2) -> Self {
+        Array([AesBlock(value.0.0), AesBlock(value.0.1)])
     }
 }
 
@@ -246,6 +215,11 @@ impl IAesBlock for AesBlock2 {
     }
 
     #[inline(always)]
+    fn first(&self) -> AesBlock {
+        AesBlock(self.0.0)
+    }
+
+    #[inline(always)]
     fn fold_xor(self) -> AesBlock {
         let Self(uint8x16x2_t(a, b)) = self;
         unsafe { AesBlock(veorq_u8(a, b)) }
@@ -253,7 +227,9 @@ impl IAesBlock for AesBlock2 {
 
     #[inline(always)]
     fn into_array(self) -> Array<u8, U32> {
-        self[0].into_array().concat(self[1].into_array())
+        AesBlock(self.0.0)
+            .into_array()
+            .concat(AesBlock(self.0.1).into_array())
     }
 }
 
@@ -298,36 +274,6 @@ impl Default for AesBlock4 {
     }
 }
 
-impl Index<usize> for AesBlock4 {
-    type Output = AesBlock;
-
-    #[inline(always)]
-    fn index(&self, index: usize) -> &Self::Output {
-        match index {
-            // same repr.
-            0 => unsafe { std::mem::transmute(&self.0.0) },
-            1 => unsafe { std::mem::transmute(&self.0.1) },
-            2 => unsafe { std::mem::transmute(&self.0.2) },
-            3 => unsafe { std::mem::transmute(&self.0.3) },
-            _ => unreachable!(),
-        }
-    }
-}
-
-impl IndexMut<usize> for AesBlock4 {
-    #[inline(always)]
-    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
-        match index {
-            // same repr.
-            0 => unsafe { std::mem::transmute(&mut self.0.0) },
-            1 => unsafe { std::mem::transmute(&mut self.0.1) },
-            2 => unsafe { std::mem::transmute(&mut self.0.2) },
-            3 => unsafe { std::mem::transmute(&mut self.0.3) },
-            _ => unreachable!(),
-        }
-    }
-}
-
 impl From<AesBlock> for AesBlock4 {
     #[inline(always)]
     fn from(value: AesBlock) -> Self {
@@ -344,6 +290,16 @@ impl From<Array<AesBlock, U4>> for AesBlock4 {
     }
 }
 
+impl From<AesBlock4> for Array<AesBlock, U4> {
+    fn from(value: AesBlock4) -> Self {
+        Array([
+            AesBlock(value.0.0),
+            AesBlock(value.0.1),
+            AesBlock(value.0.2),
+            AesBlock(value.0.3),
+        ])
+    }
+}
 impl IAesBlock for AesBlock4 {
     type Size = U64;
 
@@ -377,6 +333,11 @@ impl IAesBlock for AesBlock4 {
     }
 
     #[inline(always)]
+    fn first(&self) -> AesBlock {
+        AesBlock(self.0.0)
+    }
+
+    #[inline(always)]
     fn fold_xor(self) -> AesBlock {
         let Self(uint8x16x4_t(a, b, c, d)) = self;
         unsafe { AesBlock(veorq_u8(veor3q_u8(a, b, c), d)) }
@@ -384,10 +345,14 @@ impl IAesBlock for AesBlock4 {
 
     #[inline(always)]
     fn into_array(self) -> Array<u8, U64> {
-        self[0]
+        AesBlock(self.0.0)
             .into_array()
-            .concat(self[1].into_array())
-            .concat(self[2].into_array().concat(self[3].into_array()))
+            .concat(AesBlock(self.0.1).into_array())
+            .concat(
+                AesBlock(self.0.2)
+                    .into_array()
+                    .concat(AesBlock(self.0.3).into_array()),
+            )
     }
 }
 
