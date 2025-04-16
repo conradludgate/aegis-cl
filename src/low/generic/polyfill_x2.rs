@@ -56,7 +56,7 @@ impl From<Array<AesBlock, U2>> for AesBlock2 {
 impl From<AesBlock2> for Array<AesBlock, U2> {
     #[inline(always)]
     fn from(value: AesBlock2) -> Self {
-        Array([self.0, self.1])
+        Array([value.0, value.1])
     }
 }
 
