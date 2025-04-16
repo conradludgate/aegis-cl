@@ -1,8 +1,7 @@
-use std::mem::{transmute, transmute_copy};
 use std::ops::{BitAnd, BitXor, BitXorAssign};
 
 use hybrid_array::Array;
-use hybrid_array::sizes::{U2, U32, U64};
+use hybrid_array::sizes::{U1, U2, U16, U32, U64};
 
 use crate::AegisParallel;
 use crate::low::IAesBlock;
@@ -27,7 +26,8 @@ impl AegisParallel for U2 {
 
     #[inline(always)]
     fn from_block(a: &Array<u8, Self::Aegis256BlockSize>) -> Self::AesBlock {
-        unsafe { transmute_copy(a) }
+        let (a0, a1) = a.split_ref::<U16>();
+        AesBlock2(U1::from_block(a0), U1::from_block(a1))
     }
 }
 
@@ -89,7 +89,7 @@ impl IAesBlock for AesBlock2 {
 
     #[inline(always)]
     fn into_array(self) -> Array<u8, U32> {
-        unsafe { transmute(self) }
+        self.0.into_array().concat(self.1.into_array())
     }
 }
 
