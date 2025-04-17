@@ -216,7 +216,7 @@ fn core_decrypt_inout_detached<D: AegisParallel>(
 #[derive(Clone)]
 pub struct AegisMac128X<D: AegisParallel, T> {
     state: State128X<D>,
-    blocks: BlockBuffer<D::Aegis128BlockSize, Eager>,
+    blocks: BlockBuffer<D::Block2, Eager>,
     data_len_bits: u64,
     _parallel: PhantomData<(D, T)>,
 }

@@ -14,19 +14,19 @@ use super::AesBlock;
 pub struct AesBlock2(__m256i);
 
 impl AegisParallel for U2 {
-    type Aegis128BlockSize = U64;
-    type Aegis256BlockSize = U32;
+    type Block2 = U64;
+    type Block = U32;
 
     type AesBlock = AesBlock2;
 
     #[inline(always)]
-    fn split_blocks(a: &Array<u8, Self::Aegis128BlockSize>) -> (Self::AesBlock, Self::AesBlock) {
+    fn split_blocks(a: &Array<u8, Self::Block2>) -> (Self::AesBlock, Self::AesBlock) {
         let (a01, a23) = a.split_ref::<U32>();
         (Self::from_block(a01), Self::from_block(a23))
     }
 
     #[inline(always)]
-    fn from_block(a: &Array<u8, Self::Aegis256BlockSize>) -> Self::AesBlock {
+    fn from_block(a: &Array<u8, Self::Block>) -> Self::AesBlock {
         AesBlock2(unsafe { _mm256_loadu_epi8(a.as_ptr().cast()) })
     }
 }

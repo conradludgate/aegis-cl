@@ -9,19 +9,13 @@ use crate::AegisParallel;
 use super::IAesBlock;
 
 impl AegisParallel for U1 {
-    type Aegis128BlockSize = U32;
-    type Aegis256BlockSize = U16;
+    type Block2 = U32;
+    type Block = U16;
 
     type AesBlock = AesBlock;
 
     #[inline(always)]
-    fn split_blocks(a: &Array<u8, Self::Aegis128BlockSize>) -> (Self::AesBlock, Self::AesBlock) {
-        let (a0, a1) = a.split_ref::<U16>();
-        (Self::from_block(a0), Self::from_block(a1))
-    }
-
-    #[inline(always)]
-    fn from_block(a: &Array<u8, Self::Aegis256BlockSize>) -> Self::AesBlock {
+    fn from_block(a: &Array<u8, Self::Block>) -> Self::AesBlock {
         AesBlock(unsafe { vld1q_u8(a.as_ptr()) })
     }
 }

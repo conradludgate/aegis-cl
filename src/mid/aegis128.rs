@@ -87,7 +87,7 @@ impl<D: AegisParallel> State128X<D> {
     }
 
     #[inline]
-    pub fn encrypt_block(&mut self, mut block: InOut<'_, '_, Array<u8, D::Aegis128BlockSize>>) {
+    pub fn encrypt_block(&mut self, mut block: InOut<'_, '_, Array<u8, D::Block2>>) {
         let v = self;
         // z0 = {}
         // z1 = {}
@@ -114,7 +114,7 @@ impl<D: AegisParallel> State128X<D> {
         write::<D>(out0, out1, ci);
     }
 
-    pub fn decrypt_block(&mut self, mut block: InOut<'_, '_, Array<u8, D::Aegis128BlockSize>>) {
+    pub fn decrypt_block(&mut self, mut block: InOut<'_, '_, Array<u8, D::Block2>>) {
         let v = self;
 
         // z0 = {}
@@ -152,7 +152,7 @@ impl<D: AegisParallel> State128X<D> {
 
     fn decrypt_partial_block(
         &mut self,
-        mut padded_block: InOut<'_, '_, Array<u8, D::Aegis128BlockSize>>,
+        mut padded_block: InOut<'_, '_, Array<u8, D::Block2>>,
         len: usize,
     ) {
         let v = self;
@@ -345,7 +345,7 @@ impl<D: AegisParallel> State128X<D> {
         t0.into_array().concat(t1.into_array())
     }
 
-    pub fn absorb(&mut self, ad: &Array<u8, D::Aegis128BlockSize>) {
+    pub fn absorb(&mut self, ad: &Array<u8, D::Block2>) {
         let (t0, t1) = D::split_blocks(ad);
         self.update(t0, t1);
     }
@@ -394,12 +394,8 @@ impl<D: AegisParallel> State128X<D> {
 }
 
 #[inline]
-fn write<D: AegisParallel>(
-    a: D::AesBlock,
-    b: D::AesBlock,
-    out: &mut Array<u8, D::Aegis128BlockSize>,
-) {
-    let (p0, p1) = out.split_ref_mut::<D::Aegis256BlockSize>();
+fn write<D: AegisParallel>(a: D::AesBlock, b: D::AesBlock, out: &mut Array<u8, D::Block2>) {
+    let (p0, p1) = out.split_ref_mut::<D::Block>();
     *p0 = a.into_array();
     *p1 = b.into_array();
 }
