@@ -116,6 +116,31 @@ impl<D: AegisParallel> AegisCore for State256X<D> {
     }
 
     #[inline(always)]
+    fn encrypt_emtpy_block(&mut self, block: &mut Array<u8, Self::Block>) {
+        let v = self;
+
+        // z = {}
+        // for i in 0..D:
+        //     z = z || (V[1,i] ^ V[4,i] ^ V[5,i] ^ (V[2,i] & V[3,i]))
+        let z = v[1] ^ v[4] ^ v[5] ^ (v[2] & v[3]);
+
+        // Update(xi)
+        let tmp = v[5];
+        v[5] = v[4].aes(v[5]);
+        v[4] = v[3].aes(v[4]);
+        v[3] = v[2].aes(v[3]);
+        v[2] = v[1].aes(v[2]);
+        v[1] = v[0].aes(v[1]);
+        v[0] = tmp.aes(v[0]);
+
+        // ci = xi ^ z
+        let ci = z;
+
+        // return ci
+        *block = ci.into();
+    }
+
+    #[inline(always)]
     fn encrypt_block(&mut self, mut block: InOut<'_, '_, Array<u8, Self::Block>>) {
         let v = self;
 

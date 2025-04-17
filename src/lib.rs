@@ -4,6 +4,7 @@
 #![deny(clippy::multiple_unsafe_ops_per_block)]
 
 pub use aead;
+pub use cipher;
 pub use digest;
 pub use hybrid_array;
 

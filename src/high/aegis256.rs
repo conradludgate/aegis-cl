@@ -289,7 +289,7 @@ mod tests {
         use hex_literal::hex;
         use hybrid_array::Array;
 
-        use crate::{Tag128, X2};
+        use crate::{Tag128, Tag256, X2};
 
         use super::test_roundtrip;
 
@@ -327,30 +327,33 @@ mod tests {
             ));
             let ad = hex!("0102030401020304");
             let msg = hex!(
-                "05060708050607080506070805060708"
-                "05060708050607080506070805060708"
-                "05060708050607080506070805060708"
-                "05060708050607080506070805060708"
-                "05060708050607080506070805060708"
-                "05060708050607080506070805060708"
-                "05060708050607080506070805060708"
-                "0506070805060708"
+                "04050607040506070405060704050607"
+                "04050607040506070405060704050607"
+                "04050607040506070405060704050607"
+                "04050607040506070405060704050607"
+                "04050607040506070405060704050607"
+                "04050607040506070405060704050607"
+                "04050607040506070405060704050607"
+                "0405060704050607"
             );
             let ct = hex!(
-                "73110d21a920608fd77b580f1e442808"
-                "7a7365cb153b4eeca6b62e1a70f7f9a8"
-                "d1f31f17da4c3acfacb2517f2f5e1575"
-                "8c35532e33751a964d18d29a599d2dc0"
-                "7f9378339b9d8c9fa03d30a4d7837cc8"
-                "eb8b99bcbba2d11cd1a0f994af2b8f94"
-                "7ef18473bd519e5283736758480abc99"
-                "0e79d4ccab93dde9"
+                "72120c2ea8236180d67859001f472907"
+                "7b7064c414384fe3a7b52f1571f4f8a7"
+                "d0f01e18db4f3bc0adb150702e5d147a"
+                "8d36522132761b994c1bd395589e2ccf"
+                "0790dfe2a3d12d61cd666b2859827739"
+                "db4037dd3124c78424459376f6cac08e"
+                "1a7223a2a43e398ce6385cd654a19f48"
+                "1cba3b8f25910b42"
             );
-            let tag128 = Array(hex!("94a3bd44ad3381e36335014620ee638e"));
-            // tag256: 0392c62b17ddb00c172a010b5a327d0f
-            //         97317b6fbaee31ef741f004d7adc1e81
+            let tag128 = Array(hex!("635d391828520bf1512763f0c8f5cdbd"));
+            let tag256 = Array(hex!(
+                "b5668d3317159e9cc5d46e4803c3a76a"
+                "d63bb42b3f47956d94f30db8cb366ad7"
+            ));
 
             test_roundtrip::<X2, Tag128>(key, nonce, &ad, &msg, &ct, tag128);
+            test_roundtrip::<X2, Tag256>(key, nonce, &ad, &msg, &ct, tag256);
         }
     }
 
@@ -358,7 +361,7 @@ mod tests {
         use hex_literal::hex;
         use hybrid_array::Array;
 
-        use crate::{Tag128, X4};
+        use crate::{Tag128, Tag256, X4};
 
         use super::test_roundtrip;
 
@@ -396,30 +399,33 @@ mod tests {
             ));
             let ad = hex!("0102030401020304");
             let msg = hex!(
-                "05060708050607080506070805060708"
-                "05060708050607080506070805060708"
-                "05060708050607080506070805060708"
-                "05060708050607080506070805060708"
-                "05060708050607080506070805060708"
-                "05060708050607080506070805060708"
-                "05060708050607080506070805060708"
-                "0506070805060708"
+                "04050607040506070405060704050607"
+                "04050607040506070405060704050607"
+                "04050607040506070405060704050607"
+                "04050607040506070405060704050607"
+                "04050607040506070405060704050607"
+                "04050607040506070405060704050607"
+                "04050607040506070405060704050607"
+                "0405060704050607"
             );
             let ct = hex!(
-                "bec109547f8316d598b3b7d947ad4c0e"
-                "f5b98e217cffa0d858ad49ae34109a95"
-                "abc5b5fada820c4d6ae2fca0f5e2444e"
-                "52a04a1edb7bec71408de3e199500521"
-                "94506be3ba6a4de51a15a577ea0e4c14"
-                "f7539a13e751a555f48d0f49fecffb22"
-                "0525e60d381e2efa803b09b7164ba59f"
-                "dc66656affd51e06"
+                "bfc2085b7e8017da99b0b6d646ae4d01"
+                "f4ba8f2e7dfca1d759ae48a135139b9a"
+                "aac6b4f5db810d426be1fdaff4e14541"
+                "53a34b11da78ed7e418ee2ee9853042e"
+                "95536aecbb694cea1b16a478eb0d4d1b"
+                "f6509b1ce652a45af58e0e46ffccfa2d"
+                "0426e702391d2ff5813808b81748a490"
+                "dd656465fed61f09"
             );
-            let tag128 = Array(hex!("ec44b512d713f745547be345bcc66b6c"));
-            // tag256: ba3168ecd7f7120c5e204a7e0d616e39
-            //         5675ddfe00e4e5490a5ba93bb1a70555
+            let tag128 = Array(hex!("b63b611b13975e2f3dc3cb6c2397bfcd"));
+            let tag256 = Array(hex!(
+                "7847eace74409ee56c8f4cf63a9c2841"
+                "ce7c8bd567d7c0ca514c879a190b978c"
+            ));
 
             test_roundtrip::<X4, Tag128>(key, nonce, &ad, &msg, &ct, tag128);
+            test_roundtrip::<X4, Tag256>(key, nonce, &ad, &msg, &ct, tag256);
         }
     }
 
@@ -432,7 +438,7 @@ mod tests {
         use hybrid_array::Array;
 
         use super::AegisMac256X;
-        use crate::{AegisParallel, Tag128, X1, X2, X4, high::AegisTag};
+        use crate::{AegisParallel, Tag128, Tag256, X1, X2, X4, high::AegisTag};
 
         fn test_mac<D: AegisParallel, T: AegisTag>(
             key: Key<AegisMac256X<D, T>>,
@@ -465,8 +471,13 @@ mod tests {
                 "202122"
             );
             let tag128 = Array(hex!("c08e20cfc56f27195a46c9cef5c162d4"));
+            let tag256 = Array(hex!(
+                "a5c906ede3d69545c11e20afa360b221"
+                "f936e946ed2dba3d7c75ad6dc2784126"
+            ));
 
             test_mac::<X1, Tag128>(key, iv, &data, tag128);
+            test_mac::<X1, Tag256>(key, iv, &data, tag256);
         }
 
         #[test]
@@ -486,8 +497,13 @@ mod tests {
                 "202122"
             );
             let tag128 = Array(hex!("fb319cb6dd728a764606fb14d37f2a5e"));
+            let tag256 = Array(hex!(
+                "0844b20ed5147ceae89c7a160263afd4"
+                "b1382d6b154ecf560ce8a342cb6a8fd1"
+            ));
 
             test_mac::<X2, Tag128>(key, iv, &data, tag128);
+            test_mac::<X2, Tag256>(key, iv, &data, tag256);
         }
 
         #[test]
@@ -507,8 +523,13 @@ mod tests {
                 "202122"
             );
             let tag128 = Array(hex!("a51f9bc5beae60cce77f0dbc60761edd"));
+            let tag256 = Array(hex!(
+                "b36a16ef07c36d75a91f437502f24f54"
+                "5b8dfa88648ed116943c29fead3bf10c"
+            ));
 
             test_mac::<X4, Tag128>(key, iv, &data, tag128);
+            test_mac::<X4, Tag256>(key, iv, &data, tag256);
         }
     }
 }

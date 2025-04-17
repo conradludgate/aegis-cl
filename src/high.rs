@@ -7,12 +7,13 @@ use aead::{
     AeadCore, AeadInOut, Key, KeyInit, KeySizeUser, Nonce,
     inout::{InOut, InOutBuf},
 };
+use cipher::{BlockSizeUser, ParBlocksSizeUser, typenum::Unsigned};
 use digest::{
     FixedOutput, MacMarker, OutputSizeUser, Update,
     block_buffer::{BlockBuffer, Eager},
     crypto_common::{Iv, IvSizeUser, KeyIvInit},
 };
-use hybrid_array::sizes::{U16, U32};
+use hybrid_array::sizes::{U1, U16, U32};
 use hybrid_array::{Array, ArraySize};
 use subtle::ConstantTimeEq;
 
@@ -166,7 +167,7 @@ impl<C: AegisCore, T: AegisTag> AeadInOut for Aegis<C, T> {
         }
 
         // expected_tag = Finalize(|ad|, |msg|)
-        let expected_tag = state.finalize128(ad_len_bits, msg_len_bits);
+        let expected_tag = T::finalize(state, ad_len_bits, msg_len_bits);
 
         // if CtEq(tag, expected_tag) is False:
         //     erase msg
@@ -264,5 +265,55 @@ impl<C: AegisCore, T: AegisTag> FixedOutput for AegisMac<C, T> {
     fn finalize_into(mut self, out: &mut digest::Output<Self>) {
         self.state.absorb(&self.blocks.pad_with_zeros());
         *out = T::finalize_mac(self.state, self.data_len_bits)
+    }
+}
+
+pub type AegisStream<C> = cipher::StreamCipherCoreWrapper<AegisStreamCore<C>>;
+pub struct AegisStreamCore<C> {
+    state: C,
+    blocks: u64,
+}
+
+impl<C: AegisCore> KeySizeUser for AegisStreamCore<C> {
+    type KeySize = C::Key;
+}
+
+impl<C: AegisCore> IvSizeUser for AegisStreamCore<C> {
+    type IvSize = C::Key;
+}
+
+impl<C: AegisCore> KeyIvInit for AegisStreamCore<C> {
+    fn new(key: &Key<Self>, iv: &Iv<Self>) -> Self {
+        Self {
+            state: C::new(key, iv),
+            blocks: (1u64 << 61) / <C::Block as Unsigned>::U64,
+        }
+    }
+}
+
+impl<C: AegisCore> BlockSizeUser for AegisStreamCore<C> {
+    type BlockSize = C::Block;
+}
+impl<C: AegisCore> ParBlocksSizeUser for AegisStreamCore<C> {
+    type ParBlocksSize = U1;
+}
+
+impl<C: AegisCore> cipher::StreamCipherCore for AegisStreamCore<C> {
+    fn remaining_blocks(&self) -> Option<usize> {
+        self.blocks.try_into().ok()
+    }
+
+    fn process_with_backend(
+        &mut self,
+        f: impl cipher::StreamCipherClosure<BlockSize = Self::BlockSize>,
+    ) {
+        f.call(self);
+    }
+}
+
+impl<C: AegisCore> cipher::StreamCipherBackend for AegisStreamCore<C> {
+    fn gen_ks_block(&mut self, block: &mut cipher::Block<Self>) {
+        self.blocks -= 1;
+        self.state.encrypt_emtpy_block(block);
     }
 }

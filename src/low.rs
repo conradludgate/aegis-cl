@@ -1,11 +1,12 @@
-use hybrid_array::{Array, ArraySize};
+use cipher::crypto_common::BlockSizes;
+use hybrid_array::Array;
 use std::ops::{Add, BitAnd, BitXor, Sub};
 
 pub trait IAesBlock:
     Copy + From<AesBlock> + BitXor<Output = Self> + BitAnd<Output = Self> + Into<Array<u8, Self::Block>>
 {
-    type Block: ArraySize + Add<Self::Block, Output = Self::Block2>;
-    type Block2: ArraySize + Sub<Self::Block, Output = Self::Block>;
+    type Block: BlockSizes + Add<Self::Block, Output = Self::Block2>;
+    type Block2: BlockSizes + Sub<Self::Block, Output = Self::Block>;
 
     fn aes(self, key: Self) -> Self;
     fn reduce_xor(self) -> AesBlock;

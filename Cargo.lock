@@ -30,6 +30,7 @@ dependencies = [
  "aes",
  "benchmark-simple",
  "cfg-if",
+ "cipher",
  "digest",
  "divan",
  "hex-literal",

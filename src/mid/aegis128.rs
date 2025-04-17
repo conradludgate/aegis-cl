@@ -92,6 +92,38 @@ impl<D: AegisParallel> AegisCore for State128X<D> {
     }
 
     #[inline(always)]
+    fn encrypt_emtpy_block(&mut self, block: &mut Array<u8, Self::Block>) {
+        let v = self;
+        // z0 = {}
+        // z1 = {}
+        // for i in 0..D:
+        //     z0 = z0 || (V[6,i] ^ V[1,i] ^ (V[2,i] & V[3,i]))
+        //     z1 = z1 || (V[2,i] ^ V[5,i] ^ (V[6,i] & V[7,i]))
+        let z0 = v[6] ^ v[1] ^ (v[2] & v[3]);
+        let z1 = v[2] ^ v[5] ^ (v[6] & v[7]);
+
+        // Update(t0, t1)
+        let tmp = v[7];
+        v[7] = v[6].aes(v[7]);
+        v[6] = v[5].aes(v[6]);
+        v[5] = v[4].aes(v[5]);
+        v[4] = v[3].aes(v[4]);
+        v[3] = v[2].aes(v[3]);
+        v[2] = v[1].aes(v[2]);
+        v[1] = v[0].aes(v[1]);
+        v[0] = tmp.aes(v[0]);
+
+        // out0 = t0 ^ z0
+        // out1 = t1 ^ z1
+        let out0 = z0;
+        let out1 = z1;
+
+        // ci = out0 || out1
+        let ci = block;
+        write(out0, out1, ci);
+    }
+
+    #[inline(always)]
     fn encrypt_block(&mut self, mut block: InOut<'_, '_, Array<u8, Self::Block>>) {
         let v = self;
         // z0 = {}
@@ -106,13 +138,13 @@ impl<D: AegisParallel> AegisCore for State128X<D> {
         let xi = block.get_in();
         let (t0, t1) = util::split_blocks(xi);
 
+        // Update(t0, t1)
+        v.update(t0, t1);
+
         // out0 = t0 ^ z0
         // out1 = t1 ^ z1
         let out0 = t0 ^ z0;
         let out1 = t1 ^ z1;
-
-        // Update(t0, t1)
-        v.update(t0, t1);
 
         // ci = out0 || out1
         let ci = block.get_out();

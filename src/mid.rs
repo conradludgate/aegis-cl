@@ -1,4 +1,5 @@
 use aead::inout::InOut;
+use cipher::crypto_common::BlockSizes;
 use hybrid_array::{Array, ArraySize};
 
 use crate::low::{AesBlock, AesBlock2, AesBlock4, IAesBlock};
@@ -67,9 +68,11 @@ impl AegisParallel for crate::X4 {
 
 pub trait AegisCore {
     type Key: ArraySize;
-    type Block: ArraySize;
+    type Block: BlockSizes;
 
     fn new(key: &Array<u8, Self::Key>, iv: &Array<u8, Self::Key>) -> Self;
+
+    fn encrypt_emtpy_block(&mut self, block: &mut Array<u8, Self::Block>);
 
     fn encrypt_block(&mut self, block: InOut<'_, '_, Array<u8, Self::Block>>);
     fn decrypt_block(&mut self, block: InOut<'_, '_, Array<u8, Self::Block>>);
