@@ -6,7 +6,9 @@ edition = "2024"
 [dependencies]
 hybrid-array = "0.3.0"
 aead = { version = "0.6.0-rc.0", git = "https://github.com/RustCrypto/traits/" }
-digest = { version = "0.11.0-pre.10", features = ["mac"], git = "https://github.com/RustCrypto/traits/" }
+digest = { version = "0.11.0-pre.10", features = [
+    "mac",
+], git = "https://github.com/RustCrypto/traits/" }
 # crypto-common = { version = "0.2.0-rc.2", git = "https://github.com/RustCrypto/traits/" }
 # block-buffer = "0.11.0-rc.4"
 # cipher = { version = "0.5.0-pre.8", git = "https://github.com/RustCrypto/traits/" }
@@ -23,14 +25,15 @@ hex-literal = "1"
 aead = { version = "0.6.0-rc.0", git = "https://github.com/RustCrypto/traits/", features = ["alloc", "os_rng"] }
 benchmark-simple = "0.1.10"
 aegis = "0.9"
+divan = "0.1.21"
 
 [profile.release]
 opt-level = 3
 
 [[bench]]
-name = "benchmark_aegis"
+name = "aead"
 harness = false
 
 [[bench]]
-name = "benchmark_aegis_cl"
+name = "mac"
 harness = false
