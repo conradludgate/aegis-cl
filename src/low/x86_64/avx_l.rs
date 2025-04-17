@@ -70,7 +70,7 @@ impl IAesBlock for AesBlock {
     }
 
     #[inline(always)]
-    fn fold_xor(self) -> AesBlock {
+    fn reduce_xor(self) -> AesBlock {
         self
     }
 

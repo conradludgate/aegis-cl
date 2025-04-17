@@ -40,9 +40,9 @@ pub type AegisMac128X4<T> = AegisMac128X<hybrid_array::sizes::U4, T>;
 
 #[cfg(test)]
 mod tests {
-    use aead::consts::U1;
     use hex_literal::hex;
     use hybrid_array::Array;
+    use hybrid_array::sizes::{U1, U16};
 
     use crate::AegisParallel;
     use crate::low::IAesBlock;
@@ -58,6 +58,7 @@ mod tests {
         let rk = U1::from_block(&Array(hex!("101112131415161718191a1b1c1d1e1f")));
         let out = Array(hex!("7a7b4e5638782546a8c0477a3b813f43"));
 
-        assert_eq!(in_.aes(rk).into_array(), out);
+        let res: Array<u8, U16> = in_.aes(rk).into();
+        assert_eq!(res, out);
     }
 }

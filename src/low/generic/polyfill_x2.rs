@@ -54,6 +54,15 @@ impl From<AesBlock2> for Array<AesBlock, U2> {
     }
 }
 
+impl From<AesBlock2> for Array<u8, U32> {
+    #[inline(always)]
+    fn from(val: AesBlock2) -> Self {
+        let a: Array<u8, U16> = val.0.into();
+        let b: Array<u8, U16> = val.1.into();
+        a.concat(b)
+    }
+}
+
 impl IAesBlock for AesBlock2 {
     type Size = U32;
 
@@ -71,7 +80,7 @@ impl IAesBlock for AesBlock2 {
     }
 
     #[inline(always)]
-    fn fold_xor(self) -> AesBlock {
+    fn reduce_xor(self) -> AesBlock {
         let Self(a, b) = self;
         a ^ b
     }
@@ -79,11 +88,6 @@ impl IAesBlock for AesBlock2 {
     #[inline(always)]
     fn first(&self) -> AesBlock {
         self.0
-    }
-
-    #[inline(always)]
-    fn into_array(self) -> Array<u8, U32> {
-        self.0.into_array().concat(self.1.into_array())
     }
 }
 

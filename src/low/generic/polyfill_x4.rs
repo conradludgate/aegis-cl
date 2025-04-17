@@ -54,9 +54,18 @@ impl From<Array<AesBlock, U4>> for AesBlock4 {
 impl From<AesBlock4> for Array<AesBlock, U4> {
     #[inline(always)]
     fn from(value: AesBlock4) -> Self {
-        let Array([a, b]) = value.0.into();
-        let Array([c, d]) = value.1.into();
+        let Array([a, b]): Array<AesBlock, U2> = value.0.into();
+        let Array([c, d]): Array<AesBlock, U2> = value.1.into();
         Array([a, b, c, d])
+    }
+}
+
+impl From<AesBlock4> for Array<u8, U64> {
+    #[inline(always)]
+    fn from(val: AesBlock4) -> Self {
+        let a: Array<u8, U32> = val.0.into();
+        let b: Array<u8, U32> = val.1.into();
+        a.concat(b)
     }
 }
 
@@ -82,14 +91,9 @@ impl IAesBlock for AesBlock4 {
     }
 
     #[inline(always)]
-    fn fold_xor(self) -> AesBlock {
+    fn reduce_xor(self) -> AesBlock {
         let Self(a, b) = self;
-        a.fold_xor() ^ b.fold_xor()
-    }
-
-    #[inline(always)]
-    fn into_array(self) -> Array<u8, U64> {
-        self.0.into_array().concat(self.1.into_array())
+        a.reduce_xor() ^ b.reduce_xor()
     }
 }
 

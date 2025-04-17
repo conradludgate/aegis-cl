@@ -203,7 +203,7 @@ impl<D: AegisParallel> State128X<D> {
         //     for i in 0..D:
         //         ti = V[0,i] ^ V[1,i] ^ V[2,i] ^ V[3,i] ^ V[4,i] ^ V[5,i] ^ V[6,i]
         //         tag = tag ^ ti
-        self.fold_tag128().fold_xor().into_array()
+        self.fold_tag128().reduce_xor().into()
     }
 
     pub fn finalize_mac128(mut self, data_len_bits: u64) -> Array<u8, U16> {
@@ -256,7 +256,7 @@ impl<D: AegisParallel> State128X<D> {
         };
 
         //     tag = V[0,0] ^ V[1,0] ^ V[2,0] ^ V[3,0] ^ V[4,0] ^ V[5,0] ^ V[6,0]
-        v.fold_tag128().into_array()
+        v.fold_tag128().into()
     }
 
     pub fn finalize256(mut self, ad_len_bits: u64, msg_len_bits: u64) -> Array<u8, U32> {
@@ -279,11 +279,13 @@ impl<D: AegisParallel> State128X<D> {
         //         ti0 = ti0 ^ V[0,i] ^ V[1,i] ^ V[2,i] ^ V[3,i]
         //         ti1 = ti1 ^ V[4,i] ^ V[5,i] ^ V[6,i] ^ V[7,i]
         let [ti0, ti1] = self.fold_tag256();
-        let ti0 = ti0.fold_xor();
-        let ti1 = ti1.fold_xor();
+        let ti0 = ti0.reduce_xor();
+        let ti1 = ti1.reduce_xor();
 
         //     tag = ti0 || ti1
-        ti0.into_array().concat(ti1.into_array())
+        let ti0: Array<u8, U16> = ti0.into();
+        let ti1: Array<u8, U16> = ti1.into();
+        ti0.concat(ti1)
     }
 
     pub fn finalize_mac256(mut self, data_len_bits: u64) -> Array<u8, U32> {
@@ -342,7 +344,9 @@ impl<D: AegisParallel> State128X<D> {
         //     t1 = V[4,0] ^ V[5,0] ^ V[6,0] ^ V[7,0]
         //     tag = t0 || t1
         let [t0, t1] = v.fold_tag256();
-        t0.into_array().concat(t1.into_array())
+        let t0: Array<u8, U16> = t0.into();
+        let t1: Array<u8, U16> = t1.into();
+        t0.concat(t1)
     }
 
     pub fn absorb(&mut self, ad: &Array<u8, D::Block2>) {
@@ -396,8 +400,8 @@ impl<D: AegisParallel> State128X<D> {
 #[inline]
 fn write<D: AegisParallel>(a: D::AesBlock, b: D::AesBlock, out: &mut Array<u8, D::Block2>) {
     let (p0, p1) = out.split_ref_mut::<D::Block>();
-    *p0 = a.into_array();
-    *p1 = b.into_array();
+    *p0 = a.into();
+    *p1 = b.into();
 }
 
 #[inline]

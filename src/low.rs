@@ -22,13 +22,18 @@ pub trait AegisParallel: hybrid_array::ArraySize {
 }
 
 pub trait IAesBlock:
-    Default + Copy + From<AesBlock> + BitXor<Output = Self> + BitXorAssign + BitAnd<Output = Self>
+    Default
+    + Copy
+    + From<AesBlock>
+    + BitXor<Output = Self>
+    + BitXorAssign
+    + BitAnd<Output = Self>
+    + Into<Array<u8, Self::Size>>
 {
     type Size: ArraySize;
     fn aes(self, key: Self) -> Self;
     fn xor3(self, mid: Self, rhs: Self) -> Self;
-    fn fold_xor(self) -> AesBlock;
-    fn into_array(self) -> Array<u8, Self::Size>;
+    fn reduce_xor(self) -> AesBlock;
     fn first(&self) -> AesBlock;
 }
 

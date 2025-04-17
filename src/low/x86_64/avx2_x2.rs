@@ -83,7 +83,7 @@ impl IAesBlock for AesBlock2 {
     }
 
     #[inline(always)]
-    fn fold_xor(self) -> AesBlock {
+    fn reduce_xor(self) -> AesBlock {
         unsafe {
             let a = _mm_xor_si128(
                 _mm256_extracti128_si256::<0>(self.0),

@@ -44,6 +44,15 @@ impl From<AesBlock> for Array<AesBlock, U1> {
     }
 }
 
+impl From<AesBlock> for Array<u8, U16> {
+    #[inline(always)]
+    fn from(val: AesBlock) -> Self {
+        let mut out = Array([0; 16]);
+        unsafe { vst1q_u8(out.as_mut_ptr(), val.0) }
+        out
+    }
+}
+
 impl IAesBlock for AesBlock {
     type Size = U16;
 
@@ -63,15 +72,8 @@ impl IAesBlock for AesBlock {
     }
 
     #[inline(always)]
-    fn fold_xor(self) -> AesBlock {
+    fn reduce_xor(self) -> AesBlock {
         self
-    }
-
-    #[inline(always)]
-    fn into_array(self) -> Array<u8, U16> {
-        let mut out = Array([0; 16]);
-        unsafe { vst1q_u8(out.as_mut_ptr(), self.0) }
-        out
     }
 }
 
