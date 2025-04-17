@@ -1,4 +1,12 @@
-#![cfg_attr(target_arch = "x86_64", feature(stdarch_x86_avx512))]
+#![doc = include_str!("../README.md")]
+#![cfg_attr(all(target_arch = "x86_64", target_feature = "avx512f"), feature(stdarch_x86_avx512))]
+
+pub use aead;
+pub use hybrid_array;
+pub use digest;
+
+pub type Tag128 = hybrid_array::sizes::U16;
+pub type Tag256 = hybrid_array::sizes::U32;
 
 // *  C0: an AES block built from the following bytes in hexadecimal
 // format: { 0x00, 0x01, 0x01, 0x02, 0x03, 0x05, 0x08, 0x0d, 0x15,
