@@ -116,19 +116,17 @@ fn main() {
     println!("* Encryption:");
     println!();
 
-    {
-        let res = bench.run(options, || test_aegis128x4(&mut m));
-        println!(
-            "aegis128x4          : {}",
-            res.throughput_bits(m.len() as _)
-        );
+    let res = bench.run(options, || test_aegis128x4(&mut m));
+    println!(
+        "aegis128x4          : {}",
+        res.throughput_bits(m.len() as _)
+    );
 
-        let res = bench.run(options, || test_aegis128x2(&mut m));
-        println!(
-            "aegis128x2          : {}",
-            res.throughput_bits(m.len() as _)
-        );
-    }
+    let res = bench.run(options, || test_aegis128x2(&mut m));
+    println!(
+        "aegis128x2          : {}",
+        res.throughput_bits(m.len() as _)
+    );
 
     let res = bench.run(options, || test_aegis128l(&mut m));
     println!(
@@ -136,19 +134,17 @@ fn main() {
         res.throughput_bits(m.len() as _)
     );
 
-    {
-        let res = bench.run(options, || test_aegis256x2(&mut m));
-        println!(
-            "aegis256x2          : {}",
-            res.throughput_bits(m.len() as _)
-        );
+    let res = bench.run(options, || test_aegis256x2(&mut m));
+    println!(
+        "aegis256x2          : {}",
+        res.throughput_bits(m.len() as _)
+    );
 
-        let res = bench.run(options, || test_aegis256x4(&mut m));
-        println!(
-            "aegis256x4          : {}",
-            res.throughput_bits(m.len() as _)
-        );
-    }
+    let res = bench.run(options, || test_aegis256x4(&mut m));
+    println!(
+        "aegis256x4          : {}",
+        res.throughput_bits(m.len() as _)
+    );
 
     let res = bench.run(options, || test_aegis256(&mut m));
     println!(

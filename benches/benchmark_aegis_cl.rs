@@ -5,7 +5,10 @@ use aead::{
     consts::{U16, U32},
     inout::InOutBuf,
 };
-use aegis_cl::{Aegis128L, Aegis128X2, Aegis128X4, AegisMac128L, AegisMac128X2, AegisMac128X4};
+use aegis_cl::{
+    Aegis128L, Aegis128X2, Aegis128X4, Aegis256, Aegis256X2, Aegis256X4, AegisMac128L,
+    AegisMac128X2, AegisMac128X4,
+};
 use benchmark_simple::{Bench, Options};
 use digest::{Mac, crypto_common::KeyIvInit};
 
@@ -39,26 +42,35 @@ fn test_aegis128x4(m: &mut [u8]) {
         .unwrap();
 }
 
-// fn test_aegis256(m: &mut [u8]) {
-//     let key = [0u8; 32];
-//     let nonce = [0u8; 32];
-//     let state = Aegis256::<16>::new(&key.into());
-//     state.encrypt_inout_detached(&nonce.into(), &[], InOutBuf::from(m));
-// }
+#[inline(never)]
+fn test_aegis256(m: &mut [u8]) {
+    let key = [0u8; 32];
+    let nonce = [0u8; 32];
+    let state = Aegis256::<U16>::new(&key.into());
+    state
+        .encrypt_inout_detached(&nonce.into(), &[], InOutBuf::from(m))
+        .unwrap();
+}
 
-// fn test_aegis256x2(m: &mut [u8]) {
-//     let key = [0u8; 32];
-//     let nonce = [0u8; 32];
-//     let state = Aegis256X2::<16>::new(&key.into());
-//     state.encrypt_inout_detached(&nonce.into(), &[], InOutBuf::from(m));
-// }
+#[inline(never)]
+fn test_aegis256x2(m: &mut [u8]) {
+    let key = [0u8; 32];
+    let nonce = [0u8; 32];
+    let state = Aegis256X2::<U16>::new(&key.into());
+    state
+        .encrypt_inout_detached(&nonce.into(), &[], InOutBuf::from(m))
+        .unwrap();
+}
 
-// fn test_aegis256x4(m: &mut [u8]) {
-//     let key = [0u8; 32];
-//     let nonce = [0u8; 32];
-//     let state = Aegis256X4::<16>::new(&key.into());
-//     state.encrypt_inout_detached(&nonce.into(), &[], InOutBuf::from(m));
-// }
+#[inline(never)]
+fn test_aegis256x4(m: &mut [u8]) {
+    let key = [0u8; 32];
+    let nonce = [0u8; 32];
+    let state = Aegis256X4::<U16>::new(&key.into());
+    state
+        .encrypt_inout_detached(&nonce.into(), &[], InOutBuf::from(m))
+        .unwrap();
+}
 
 #[inline(never)]
 fn test_aegis128l_mac(m: &[u8]) {
@@ -144,21 +156,21 @@ fn main() {
         res.throughput_bits(m.len() as _)
     );
 
-    // let res = bench.run(options, || test_aegis256x2(&mut m));
-    // println!(
-    //     "aegis256x2          : {}",
-    //     res.throughput_bits(m.len() as _)
-    // );
+    let res = bench.run(options, || test_aegis256x2(&mut m));
+    println!(
+        "aegis256x2          : {}",
+        res.throughput_bits(m.len() as _)
+    );
 
-    // let res = bench.run(options, || test_aegis256x4(&mut m));
-    // println!(
-    //     "aegis256x4          : {}",
-    //     res.throughput_bits(m.len() as _)
-    // );
+    let res = bench.run(options, || test_aegis256x4(&mut m));
+    println!(
+        "aegis256x4          : {}",
+        res.throughput_bits(m.len() as _)
+    );
 
-    // let res = bench.run(options, || test_aegis256(&mut m));
-    // println!(
-    //     "aegis256            : {}",
-    //     res.throughput_bits(m.len() as _)
-    // );
+    let res = bench.run(options, || test_aegis256(&mut m));
+    println!(
+        "aegis256            : {}",
+        res.throughput_bits(m.len() as _)
+    );
 }

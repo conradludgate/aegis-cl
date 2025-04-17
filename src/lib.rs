@@ -20,11 +20,13 @@ mod low;
 
 mod mid {
     pub mod aegis128;
+    pub mod aegis256;
     pub mod util;
 }
 
 mod high {
     pub mod aegis128;
+    pub mod aegis256;
 }
 
 pub use low::AegisParallel;
@@ -37,6 +39,15 @@ pub type Aegis128X4<T> = Aegis128X<hybrid_array::sizes::U4, T>;
 pub type AegisMac128L<T> = AegisMac128X<hybrid_array::sizes::U1, T>;
 pub type AegisMac128X2<T> = AegisMac128X<hybrid_array::sizes::U2, T>;
 pub type AegisMac128X4<T> = AegisMac128X<hybrid_array::sizes::U4, T>;
+
+pub use high::aegis256::{Aegis256X, AegisMac256X};
+pub type Aegis256<T> = Aegis256X<hybrid_array::sizes::U1, T>;
+pub type Aegis256X2<T> = Aegis256X<hybrid_array::sizes::U2, T>;
+pub type Aegis256X4<T> = Aegis256X<hybrid_array::sizes::U4, T>;
+
+pub type AegisMac256L<T> = AegisMac256X<hybrid_array::sizes::U1, T>;
+pub type AegisMac256X2<T> = AegisMac256X<hybrid_array::sizes::U2, T>;
+pub type AegisMac256X4<T> = AegisMac256X<hybrid_array::sizes::U4, T>;
 
 #[cfg(test)]
 mod tests {
