@@ -13,11 +13,6 @@ impl AegisParallel for U1 {
     type Block = U16;
 
     type AesBlock = AesBlock;
-
-    #[inline(always)]
-    fn from_block(a: &Array<u8, Self::Block>) -> Self::AesBlock {
-        AesBlock(unsafe { vld1q_u8(a.as_ptr()) })
-    }
 }
 
 #[derive(Clone, Copy)]
@@ -74,6 +69,10 @@ impl IAesBlock for AesBlock {
     #[inline(always)]
     fn reduce_xor(self) -> AesBlock {
         self
+    }
+    #[inline(always)]
+    fn from_block(a: &Array<u8, Self::Size>) -> Self {
+        AesBlock(unsafe { vld1q_u8(a.as_ptr()) })
     }
 }
 

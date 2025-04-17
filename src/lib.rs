@@ -42,10 +42,9 @@ pub type AegisMac128X4<T> = AegisMac128X<hybrid_array::sizes::U4, T>;
 mod tests {
     use hex_literal::hex;
     use hybrid_array::Array;
-    use hybrid_array::sizes::{U1, U16};
+    use hybrid_array::sizes::U16;
 
-    use crate::AegisParallel;
-    use crate::low::IAesBlock;
+    use crate::low::{AesBlock, IAesBlock};
 
     /// <https://www.ietf.org/archive/id/draft-irtf-cfrg-aegis-aead-16.html#appendix-A.1>
     #[test]
@@ -54,8 +53,8 @@ mod tests {
         // rk   : 101112131415161718191a1b1c1d1e1f
         // out  : 7a7b4e5638782546a8c0477a3b813f43
 
-        let in_ = U1::from_block(&Array(hex!("000102030405060708090a0b0c0d0e0f")));
-        let rk = U1::from_block(&Array(hex!("101112131415161718191a1b1c1d1e1f")));
+        let in_ = AesBlock::from_block(&Array(hex!("000102030405060708090a0b0c0d0e0f")));
+        let rk = AesBlock::from_block(&Array(hex!("101112131415161718191a1b1c1d1e1f")));
         let out = Array(hex!("7a7b4e5638782546a8c0477a3b813f43"));
 
         let res: Array<u8, U16> = in_.aes(rk).into();

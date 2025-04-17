@@ -1,7 +1,7 @@
 use std::ops::{BitAnd, BitXor, BitXorAssign};
 
 use hybrid_array::Array;
-use hybrid_array::sizes::{U1, U2, U16, U32, U64};
+use hybrid_array::sizes::{U2, U16, U32, U64};
 
 use crate::AegisParallel;
 use crate::low::IAesBlock;
@@ -17,12 +17,6 @@ impl AegisParallel for U2 {
     type Block = U32;
 
     type AesBlock = AesBlock2;
-
-    #[inline(always)]
-    fn from_block(a: &Array<u8, Self::Block>) -> Self::AesBlock {
-        let (a0, a1) = a.split_ref::<U16>();
-        AesBlock2(U1::from_block(a0), U1::from_block(a1))
-    }
 }
 
 impl Default for AesBlock2 {
@@ -88,6 +82,12 @@ impl IAesBlock for AesBlock2 {
     #[inline(always)]
     fn first(&self) -> AesBlock {
         self.0
+    }
+
+    #[inline(always)]
+    fn from_block(a: &Array<u8, Self::Size>) -> Self {
+        let (a0, a1) = a.split_ref::<U16>();
+        AesBlock2(AesBlock::from_block(a0), AesBlock::from_block(a1))
     }
 }
 

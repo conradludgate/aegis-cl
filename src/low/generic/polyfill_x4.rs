@@ -19,11 +19,6 @@ impl AegisParallel for U4 {
 
     type AesBlock = AesBlock4;
 
-    #[inline(always)]
-    fn from_block(a: &Array<u8, Self::Block>) -> Self::AesBlock {
-        let (a0, a1) = a.split_ref::<U32>();
-        AesBlock4(U2::from_block(a0), U2::from_block(a1))
-    }
 }
 
 impl Default for AesBlock4 {
@@ -94,6 +89,12 @@ impl IAesBlock for AesBlock4 {
     fn reduce_xor(self) -> AesBlock {
         let Self(a, b) = self;
         a.reduce_xor() ^ b.reduce_xor()
+    }
+
+    #[inline(always)]
+    fn from_block(a: &Array<u8, Self::Size>) -> Self {
+        let (a0, a1) = a.split_ref::<U32>();
+        AesBlock4(AesBlock2::from_block(a0), AesBlock2::from_block(a1))
     }
 }
 

@@ -9,7 +9,7 @@ use hybrid_array::{
     sizes::{U1, U16},
 };
 
-use super::util::ctx;
+use super::util;
 use crate::{
     AegisParallel, C0, C1,
     low::{AesBlock, IAesBlock},
@@ -35,10 +35,10 @@ impl<D: AegisParallel> IndexMut<usize> for State128X<D> {
 impl<D: AegisParallel> State128X<D> {
     #[inline(always)]
     pub fn new(key: &Array<u8, U16>, iv: &Array<u8, U16>) -> Self {
-        let key = U1::from_block(key);
-        let nonce = U1::from_block(iv);
-        let c0 = U1::from_block(&C0);
-        let c1 = U1::from_block(&C1);
+        let key = AesBlock::from_block(key);
+        let nonce = AesBlock::from_block(iv);
+        let c0 = AesBlock::from_block(&C0);
+        let c1 = AesBlock::from_block(&C1);
 
         // for i in 0..D:
         //     V[0,i] = key ^ nonce
@@ -65,7 +65,7 @@ impl<D: AegisParallel> State128X<D> {
 
         // for i in 0..D:
         //     ctx[i] = ZeroPad(Byte(i) || Byte(D - 1), 128)
-        let ctx = ctx::<D>();
+        let ctx = util::ctx::<D>();
 
         let key = D::AesBlock::from(key);
         let nonce = D::AesBlock::from(nonce);
@@ -99,7 +99,7 @@ impl<D: AegisParallel> State128X<D> {
 
         // t0, t1 = Split(xi, R)
         let xi = block.get_in();
-        let (t0, t1) = D::split_blocks(xi);
+        let (t0, t1) = util::split_blocks::<D>(xi);
 
         // out0 = t0 ^ z0
         // out1 = t1 ^ z1
@@ -127,7 +127,7 @@ impl<D: AegisParallel> State128X<D> {
 
         // t0, t1 = Split(ci, R)
         let ci = block.get_in();
-        let (t0, t1) = D::split_blocks(ci);
+        let (t0, t1) = util::split_blocks::<D>(ci);
 
         // out0 = t0 ^ z0
         // out1 = t1 ^ z1
@@ -167,7 +167,7 @@ impl<D: AegisParallel> State128X<D> {
 
         // t0, t1 = Split(ZeroPad(cn, R), 128 * D)
         let cn = padded_block.get_in();
-        let (t0, t1) = D::split_blocks(cn);
+        let (t0, t1) = util::split_blocks::<D>(cn);
 
         // out0 = t0 ^ z0
         // out1 = t1 ^ z1
@@ -180,7 +180,7 @@ impl<D: AegisParallel> State128X<D> {
         xn[len..].fill(0);
 
         // v0, v1 = Split(ZeroPad(xn, R), 128 * D)
-        let (v0, v1) = D::split_blocks(xn);
+        let (v0, v1) = util::split_blocks::<D>(xn);
         v.update(v0, v1);
     }
 
@@ -283,9 +283,7 @@ impl<D: AegisParallel> State128X<D> {
         let ti1 = ti1.reduce_xor();
 
         //     tag = ti0 || ti1
-        let ti0: Array<u8, U16> = ti0.into();
-        let ti1: Array<u8, U16> = ti1.into();
-        ti0.concat(ti1)
+        util::join_blocks::<U1>(ti0, ti1)
     }
 
     pub fn finalize_mac256(mut self, data_len_bits: u64) -> Array<u8, U32> {
@@ -344,13 +342,11 @@ impl<D: AegisParallel> State128X<D> {
         //     t1 = V[4,0] ^ V[5,0] ^ V[6,0] ^ V[7,0]
         //     tag = t0 || t1
         let [t0, t1] = v.fold_tag256();
-        let t0: Array<u8, U16> = t0.into();
-        let t1: Array<u8, U16> = t1.into();
-        t0.concat(t1)
+        util::join_blocks::<U1>(t0, t1)
     }
 
     pub fn absorb(&mut self, ad: &Array<u8, D::Block2>) {
-        let (t0, t1) = D::split_blocks(ad);
+        let (t0, t1) = util::split_blocks::<D>(ad);
         self.update(t0, t1);
     }
 
@@ -405,11 +401,11 @@ fn write<D: AegisParallel>(a: D::AesBlock, b: D::AesBlock, out: &mut Array<u8, D
 }
 
 #[inline]
-fn concatu64(x: u64, y: u64) -> <U1 as AegisParallel>::AesBlock {
+fn concatu64(x: u64, y: u64) -> AesBlock {
     let mut u = Array([0; 16]);
     u[..8].copy_from_slice(&x.to_le_bytes());
     u[8..].copy_from_slice(&y.to_le_bytes());
-    U1::from_block(&u)
+    AesBlock::from_block(&u)
 }
 
 #[cfg(test)]
@@ -420,7 +416,7 @@ mod tests {
     use hex_literal::hex;
     use hybrid_array::Array;
 
-    use crate::AegisParallel;
+    use crate::{low::AesBlock, low::IAesBlock};
 
     use super::State128X;
 
@@ -429,18 +425,18 @@ mod tests {
     #[rustfmt::skip]
     fn update() {
         let mut s: State128X<U1> = State128X([
-            U1::from_block(&Array(hex!("9b7e60b24cc873ea894ecc07911049a3"))),
-            U1::from_block(&Array(hex!("330be08f35300faa2ebf9a7b0d274658"))),
-            U1::from_block(&Array(hex!("7bbd5bd2b049f7b9b515cf26fbe7756c"))),
-            U1::from_block(&Array(hex!("c35a00f55ea86c3886ec5e928f87db18"))),
-            U1::from_block(&Array(hex!("9ebccafce87cab446396c4334592c91f"))),
-            U1::from_block(&Array(hex!("58d83e31f256371e60fc6bb257114601"))),
-            U1::from_block(&Array(hex!("1639b56ea322c88568a176585bc915de"))),
-            U1::from_block(&Array(hex!("640818ffb57dc0fbc2e72ae93457e39a"))),
+            AesBlock::from_block(&Array(hex!("9b7e60b24cc873ea894ecc07911049a3"))),
+            AesBlock::from_block(&Array(hex!("330be08f35300faa2ebf9a7b0d274658"))),
+            AesBlock::from_block(&Array(hex!("7bbd5bd2b049f7b9b515cf26fbe7756c"))),
+            AesBlock::from_block(&Array(hex!("c35a00f55ea86c3886ec5e928f87db18"))),
+            AesBlock::from_block(&Array(hex!("9ebccafce87cab446396c4334592c91f"))),
+            AesBlock::from_block(&Array(hex!("58d83e31f256371e60fc6bb257114601"))),
+            AesBlock::from_block(&Array(hex!("1639b56ea322c88568a176585bc915de"))),
+            AesBlock::from_block(&Array(hex!("640818ffb57dc0fbc2e72ae93457e39a"))),
         ]);
 
-        let m0 = U1::from_block(&Array(hex!("033e6975b94816879e42917650955aa0")));
-        let m1 = U1::from_block(&Array(hex!("fcc1968a46b7e97861bd6e89af6aa55f")));
+        let m0 = AesBlock::from_block(&Array(hex!("033e6975b94816879e42917650955aa0")));
+        let m1 = AesBlock::from_block(&Array(hex!("fcc1968a46b7e97861bd6e89af6aa55f")));
 
         s.update(m0, m1);
 
