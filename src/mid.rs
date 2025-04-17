@@ -1,14 +1,12 @@
-use aead::inout::{InOut, InOutBuf};
+use aead::inout::InOut;
 use hybrid_array::sizes::{U16, U32};
 use hybrid_array::{Array, ArraySize};
 
-use crate::AegisParallel;
-
 pub mod aegis128;
 pub mod aegis256;
-pub mod util;
+mod util;
 
-pub trait AegisCore<D: AegisParallel> {
+pub trait AegisCore {
     type Key: ArraySize;
     type Block: ArraySize;
 
@@ -16,14 +14,6 @@ pub trait AegisCore<D: AegisParallel> {
 
     fn encrypt_block(&mut self, block: InOut<'_, '_, Array<u8, Self::Block>>);
     fn decrypt_block(&mut self, block: InOut<'_, '_, Array<u8, Self::Block>>);
-
-    fn decrypt_partial(&mut self, mut tail: InOutBuf<'_, '_, u8>) {
-        let len = tail.len();
-        let mut msg_chunk = Array::default();
-        msg_chunk[..len].copy_from_slice(tail.get_in());
-        self.decrypt_partial_block(InOut::from(&mut msg_chunk), len);
-        tail.get_out().copy_from_slice(&msg_chunk[..len]);
-    }
 
     fn decrypt_partial_block(
         &mut self,

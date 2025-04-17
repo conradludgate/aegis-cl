@@ -16,54 +16,19 @@ const C1: Array<u8, hybrid_array::sizes::U16> = Array([
 
 use hybrid_array::Array;
 
-mod low;
-mod mid;
-
-mod high {
-    pub mod aegis128;
-    pub mod aegis256;
-}
+pub mod low;
+pub mod mid;
+pub mod high;
 
 pub use low::AegisParallel;
+pub use mid::AegisCore;
 
-pub use high::aegis128::{Aegis128X, AegisMac128X};
-pub type Aegis128L<T> = Aegis128X<hybrid_array::sizes::U1, T>;
-pub type Aegis128X2<T> = Aegis128X<hybrid_array::sizes::U2, T>;
-pub type Aegis128X4<T> = Aegis128X<hybrid_array::sizes::U4, T>;
+pub use high::aegis128::{
+    Aegis128L, Aegis128X, Aegis128X2, Aegis128X4, AegisMac128L, AegisMac128X, AegisMac128X2,
+    AegisMac128X4,
+};
 
-pub type AegisMac128L<T> = AegisMac128X<hybrid_array::sizes::U1, T>;
-pub type AegisMac128X2<T> = AegisMac128X<hybrid_array::sizes::U2, T>;
-pub type AegisMac128X4<T> = AegisMac128X<hybrid_array::sizes::U4, T>;
-
-pub use high::aegis256::{Aegis256X, AegisMac256X};
-pub type Aegis256<T> = Aegis256X<hybrid_array::sizes::U1, T>;
-pub type Aegis256X2<T> = Aegis256X<hybrid_array::sizes::U2, T>;
-pub type Aegis256X4<T> = Aegis256X<hybrid_array::sizes::U4, T>;
-
-pub type AegisMac256L<T> = AegisMac256X<hybrid_array::sizes::U1, T>;
-pub type AegisMac256X2<T> = AegisMac256X<hybrid_array::sizes::U2, T>;
-pub type AegisMac256X4<T> = AegisMac256X<hybrid_array::sizes::U4, T>;
-
-#[cfg(test)]
-mod tests {
-    use hex_literal::hex;
-    use hybrid_array::Array;
-    use hybrid_array::sizes::U16;
-
-    use crate::low::{AesBlock, IAesBlock};
-
-    /// <https://www.ietf.org/archive/id/draft-irtf-cfrg-aegis-aead-16.html#appendix-A.1>
-    #[test]
-    fn aes_round() {
-        // in   : 000102030405060708090a0b0c0d0e0f
-        // rk   : 101112131415161718191a1b1c1d1e1f
-        // out  : 7a7b4e5638782546a8c0477a3b813f43
-
-        let in_ = AesBlock::from_block(&Array(hex!("000102030405060708090a0b0c0d0e0f")));
-        let rk = AesBlock::from_block(&Array(hex!("101112131415161718191a1b1c1d1e1f")));
-        let out = Array(hex!("7a7b4e5638782546a8c0477a3b813f43"));
-
-        let res: Array<u8, U16> = in_.aes(rk).into();
-        assert_eq!(res, out);
-    }
-}
+pub use high::aegis256::{
+    Aegis256, Aegis256X, Aegis256X2, Aegis256X4, AegisMac256, AegisMac256X, AegisMac256X2,
+    AegisMac256X4,
+};

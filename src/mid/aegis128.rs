@@ -29,7 +29,7 @@ impl<D: AegisParallel> IndexMut<usize> for State128X<D> {
     }
 }
 
-impl<D: AegisParallel> AegisCore<D> for State128X<D> {
+impl<D: AegisParallel> AegisCore for State128X<D> {
     type Key = U16;
     type Block = D::Block2;
 
@@ -86,7 +86,7 @@ impl<D: AegisParallel> AegisCore<D> for State128X<D> {
         v
     }
 
-    #[inline]
+    #[inline(always)]
     fn encrypt_block(&mut self, mut block: InOut<'_, '_, Array<u8, D::Block2>>) {
         let v = self;
         // z0 = {}
@@ -114,6 +114,7 @@ impl<D: AegisParallel> AegisCore<D> for State128X<D> {
         write::<D>(out0, out1, ci);
     }
 
+    #[inline(always)]
     fn decrypt_block(&mut self, mut block: InOut<'_, '_, Array<u8, D::Block2>>) {
         let v = self;
 
@@ -142,6 +143,7 @@ impl<D: AegisParallel> AegisCore<D> for State128X<D> {
         write::<D>(out0, out1, xi);
     }
 
+    #[inline(always)]
     fn decrypt_partial_block(
         &mut self,
         mut padded_block: InOut<'_, '_, Array<u8, D::Block2>>,
@@ -176,11 +178,11 @@ impl<D: AegisParallel> AegisCore<D> for State128X<D> {
         v.update(v0, v1);
     }
 
-    #[inline]
+    #[inline(always)]
     fn finalize128(mut self, ad_len_bits: u64, msg_len_bits: u64) -> Array<u8, U16> {
         // t = {}
         // u = LE64(ad_len_bits) || LE64(msg_len_bits)
-        let u = concatu64(ad_len_bits, msg_len_bits).into();
+        let u = util::concatu64(ad_len_bits, msg_len_bits).into();
 
         // for i in 0..D:
         //     t = t || (V[2,i] ^ u)
@@ -198,10 +200,11 @@ impl<D: AegisParallel> AegisCore<D> for State128X<D> {
         self.fold_tag128().reduce_xor().into()
     }
 
+    #[inline(always)]
     fn finalize_mac128(mut self, data_len_bits: u64) -> Array<u8, U16> {
         // t = {}
         // u = LE64(data_len_bits) || LE64(tag_len_bits)
-        let u = concatu64(data_len_bits, 128).into();
+        let u = util::concatu64(data_len_bits, 128).into();
 
         // for i in 0..D:
         //     t = t || (V[2,i] ^ u)
@@ -231,7 +234,7 @@ impl<D: AegisParallel> AegisCore<D> for State128X<D> {
             }
 
             // u = LE64(D) || LE64(tag_len_bits)
-            let u = concatu64(D::U64, 128);
+            let u = util::concatu64(D::U64, 128);
 
             // t = ZeroPad(V[2,0] ^ u, R)
             let t = v[2].first() ^ u;
@@ -251,10 +254,11 @@ impl<D: AegisParallel> AegisCore<D> for State128X<D> {
         v.fold_tag128().into()
     }
 
+    #[inline(always)]
     fn finalize256(mut self, ad_len_bits: u64, msg_len_bits: u64) -> Array<u8, U32> {
         // t = {}
         // u = LE64(ad_len_bits) || LE64(msg_len_bits)
-        let u = concatu64(ad_len_bits, msg_len_bits).into();
+        let u = util::concatu64(ad_len_bits, msg_len_bits).into();
 
         // for i in 0..D:
         //     t = t || (V[2,i] ^ u)
@@ -278,10 +282,11 @@ impl<D: AegisParallel> AegisCore<D> for State128X<D> {
         util::join_blocks::<U1>(ti0, ti1)
     }
 
+    #[inline(always)]
     fn finalize_mac256(mut self, data_len_bits: u64) -> Array<u8, U32> {
         // t = {}
         // u = LE64(data_len_bits) || LE64(tag_len_bits)
-        let u = concatu64(data_len_bits, 256).into();
+        let u = util::concatu64(data_len_bits, 256).into();
 
         // for i in 0..D:
         //     t = t || (V[2,i] ^ u)
@@ -314,7 +319,7 @@ impl<D: AegisParallel> AegisCore<D> for State128X<D> {
             }
 
             // u = LE64(D) || LE64(tag_len_bits)
-            let u = concatu64(D::U64, 256);
+            let u = util::concatu64(D::U64, 256);
 
             // t = ZeroPad(V[2,0] ^ u, R)
             let t = v[2].first() ^ u;
@@ -337,6 +342,7 @@ impl<D: AegisParallel> AegisCore<D> for State128X<D> {
         util::join_blocks::<U1>(t0, t1)
     }
 
+    #[inline(always)]
     fn absorb(&mut self, ad: &Array<u8, D::Block2>) {
         let (t0, t1) = util::split_blocks::<D>(ad);
         self.update(t0, t1);
@@ -344,7 +350,7 @@ impl<D: AegisParallel> AegisCore<D> for State128X<D> {
 }
 
 impl<D: AegisParallel> State128X<D> {
-    #[inline]
+    #[inline(always)]
     fn update(&mut self, m0: D::AesBlock, m1: D::AesBlock) {
         let v = self;
 
@@ -371,12 +377,12 @@ impl<D: AegisParallel> State128X<D> {
         v[0] = v[0] ^ m0;
     }
 
-    #[inline]
+    #[inline(always)]
     fn fold_tag128(self) -> D::AesBlock {
         self[0] ^ self[1] ^ self[2] ^ self[3] ^ self[4] ^ self[5] ^ self[6]
     }
 
-    #[inline]
+    #[inline(always)]
     fn fold_tag256(self) -> [D::AesBlock; 2] {
         [
             self[0] ^ self[1] ^ self[2] ^ self[3],
@@ -385,19 +391,11 @@ impl<D: AegisParallel> State128X<D> {
     }
 }
 
-#[inline]
+#[inline(always)]
 fn write<D: AegisParallel>(a: D::AesBlock, b: D::AesBlock, out: &mut Array<u8, D::Block2>) {
     let (p0, p1) = out.split_ref_mut::<D::Block>();
     *p0 = a.into();
     *p1 = b.into();
-}
-
-#[inline]
-fn concatu64(x: u64, y: u64) -> AesBlock {
-    let mut u = Array([0; 16]);
-    u[..8].copy_from_slice(&x.to_le_bytes());
-    u[8..].copy_from_slice(&y.to_le_bytes());
-    AesBlock::from_block(&u)
 }
 
 #[cfg(test)]
