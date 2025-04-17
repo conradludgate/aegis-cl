@@ -76,11 +76,6 @@ impl IAesBlock for AesBlock2 {
     }
 
     #[inline(always)]
-    fn xor3(self, mid: Self, rhs: Self) -> Self {
-        self ^ mid ^ rhs
-    }
-
-    #[inline(always)]
     fn reduce_xor(self) -> AesBlock {
         unsafe {
             let a = _mm_xor_si128(

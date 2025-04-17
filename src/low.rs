@@ -21,7 +21,6 @@ pub trait IAesBlock:
 {
     type Size: ArraySize;
     fn aes(self, key: Self) -> Self;
-    fn xor3(self, mid: Self, rhs: Self) -> Self;
     fn reduce_xor(self) -> AesBlock;
     fn first(&self) -> AesBlock;
 

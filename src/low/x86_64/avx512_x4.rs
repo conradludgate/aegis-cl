@@ -82,11 +82,6 @@ impl IAesBlock for AesBlock4 {
     }
 
     #[inline(always)]
-    fn xor3(self, mid: Self, rhs: Self) -> Self {
-        self ^ mid ^ rhs
-    }
-
-    #[inline(always)]
     fn first(&self) -> AesBlock {
         unsafe { AesBlock(_mm512_extracti64x2_epi64::<0>(self.0)) }
     }

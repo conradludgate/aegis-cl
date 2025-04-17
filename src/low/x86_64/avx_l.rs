@@ -58,11 +58,6 @@ impl IAesBlock for AesBlock {
     }
 
     #[inline(always)]
-    fn xor3(self, mid: Self, rhs: Self) -> Self {
-        self ^ mid ^ rhs
-    }
-
-    #[inline(always)]
     fn first(&self) -> AesBlock {
         *self
     }

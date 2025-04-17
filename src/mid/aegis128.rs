@@ -379,16 +379,14 @@ impl<D: AegisParallel> State128X<D> {
 
     #[inline]
     fn fold_tag128(self) -> D::AesBlock {
-        let a = self[0].xor3(self[1], self[2]);
-        let b = self[3].xor3(self[4], self[5]);
-        self[6].xor3(a, b)
+        self[0] ^ self[1] ^ self[2] ^ self[3] ^ self[4] ^ self[5] ^ self[6]
     }
 
     #[inline]
     fn fold_tag256(self) -> [D::AesBlock; 2] {
         [
-            self[0].xor3(self[1], self[2]) ^ self[3],
-            self[4].xor3(self[5], self[6]) ^ self[7],
+            self[0] ^ self[1] ^ self[2] ^ self[3],
+            self[4] ^ self[5] ^ self[6] ^ self[7],
         ]
     }
 }
