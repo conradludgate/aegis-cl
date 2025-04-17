@@ -9,9 +9,9 @@ use digest::{
 use hybrid_array::{Array, sizes::U16};
 use subtle::ConstantTimeEq;
 
-use crate::AegisParallel;
 use crate::mid::aegis128::State128X;
 use crate::mid::util;
+use crate::{AegisParallel, mid::AegisCore};
 
 pub struct Aegis128X<D, T>(Array<u8, U16>, PhantomData<(D, T)>);
 

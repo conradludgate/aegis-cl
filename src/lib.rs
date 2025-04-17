@@ -17,12 +17,7 @@ const C1: Array<u8, hybrid_array::sizes::U16> = Array([
 use hybrid_array::Array;
 
 mod low;
-
-mod mid {
-    pub mod aegis128;
-    pub mod aegis256;
-    pub mod util;
-}
+mod mid;
 
 mod high {
     pub mod aegis128;

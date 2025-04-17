@@ -10,9 +10,9 @@ use hybrid_array::Array;
 use hybrid_array::sizes::{U16, U32};
 use subtle::ConstantTimeEq;
 
-use crate::AegisParallel;
 use crate::mid::aegis256::State256X;
 use crate::mid::util;
+use crate::{AegisParallel, mid::AegisCore};
 
 pub struct Aegis256X<D, T>(Array<u8, U32>, PhantomData<(D, T)>);
 

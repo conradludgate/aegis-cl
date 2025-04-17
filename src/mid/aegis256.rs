@@ -1,15 +1,12 @@
 use std::ops::{Index, IndexMut};
 
-use aead::{
-    consts::U32,
-    inout::{InOut, InOutBuf},
-};
+use aead::{consts::U32, inout::InOut};
 use hybrid_array::{
     Array,
     sizes::{U1, U16},
 };
 
-use super::util;
+use super::{AegisCore, util};
 use crate::{
     AegisParallel, C0, C1,
     low::{AesBlock, IAesBlock},
@@ -32,9 +29,12 @@ impl<D: AegisParallel> IndexMut<usize> for State256X<D> {
     }
 }
 
-impl<D: AegisParallel> State256X<D> {
+impl<D: AegisParallel> AegisCore<D> for State256X<D> {
+    type Key = U32;
+    type Block = D::Block;
+
     #[inline(always)]
-    pub fn new(key: &Array<u8, U32>, iv: &Array<u8, U32>) -> Self {
+    fn new(key: &Array<u8, U32>, iv: &Array<u8, U32>) -> Self {
         let (k0, k1) = util::split_blocks::<U1>(key);
         let (n0, n1) = util::split_blocks::<U1>(iv);
         let c0 = AesBlock::from_block(&C0);
@@ -110,7 +110,7 @@ impl<D: AegisParallel> State256X<D> {
     }
 
     #[inline]
-    pub fn encrypt_block(&mut self, mut block: InOut<'_, '_, Array<u8, D::Block>>) {
+    fn encrypt_block(&mut self, mut block: InOut<'_, '_, Array<u8, D::Block>>) {
         let v = self;
 
         // z = {}
@@ -129,7 +129,7 @@ impl<D: AegisParallel> State256X<D> {
         *block.get_out() = ci.into();
     }
 
-    pub fn decrypt_block(&mut self, mut block: InOut<'_, '_, Array<u8, D::Block>>) {
+    fn decrypt_block(&mut self, mut block: InOut<'_, '_, Array<u8, D::Block>>) {
         let v = self;
 
         // z = {}
@@ -146,14 +146,6 @@ impl<D: AegisParallel> State256X<D> {
 
         // return xi
         *block.get_out() = xi.into();
-    }
-
-    pub fn decrypt_partial(&mut self, mut tail: InOutBuf<'_, '_, u8>) {
-        let len = tail.len();
-        let mut msg_chunk = Array::default();
-        msg_chunk[..len].copy_from_slice(tail.get_in());
-        self.decrypt_partial_block(InOut::from(&mut msg_chunk), len);
-        tail.get_out().copy_from_slice(&msg_chunk[..len]);
     }
 
     fn decrypt_partial_block(
@@ -187,7 +179,7 @@ impl<D: AegisParallel> State256X<D> {
     }
 
     #[inline]
-    pub fn finalize128(mut self, ad_len_bits: u64, msg_len_bits: u64) -> Array<u8, U16> {
+    fn finalize128(mut self, ad_len_bits: u64, msg_len_bits: u64) -> Array<u8, U16> {
         // t = {}
         // u = LE64(ad_len_bits) || LE64(msg_len_bits)
         let u = concatu64(ad_len_bits, msg_len_bits).into();
@@ -208,7 +200,7 @@ impl<D: AegisParallel> State256X<D> {
         self.fold_tag128().reduce_xor().into()
     }
 
-    pub fn finalize_mac128(mut self, data_len_bits: u64) -> Array<u8, U16> {
+    fn finalize_mac128(mut self, data_len_bits: u64) -> Array<u8, U16> {
         // t = {}
         // u = LE64(data_len_bits) || LE64(tag_len_bits)
         let u = concatu64(data_len_bits, 128).into();
@@ -260,7 +252,7 @@ impl<D: AegisParallel> State256X<D> {
         v.fold_tag128().into()
     }
 
-    pub fn finalize256(mut self, ad_len_bits: u64, msg_len_bits: u64) -> Array<u8, U32> {
+    fn finalize256(mut self, ad_len_bits: u64, msg_len_bits: u64) -> Array<u8, U32> {
         // t = {}
         // u = LE64(ad_len_bits) || LE64(msg_len_bits)
         let u = concatu64(ad_len_bits, msg_len_bits).into();
@@ -287,7 +279,7 @@ impl<D: AegisParallel> State256X<D> {
         util::join_blocks::<U1>(ti0, ti1)
     }
 
-    pub fn finalize_mac256(mut self, data_len_bits: u64) -> Array<u8, U32> {
+    fn finalize_mac256(mut self, data_len_bits: u64) -> Array<u8, U32> {
         // t = {}
         // u = LE64(data_len_bits) || LE64(tag_len_bits)
         let u = concatu64(data_len_bits, 256).into();
@@ -347,10 +339,12 @@ impl<D: AegisParallel> State256X<D> {
         util::join_blocks::<U1>(t0, t1)
     }
 
-    pub fn absorb(&mut self, ad: &Array<u8, D::Block>) {
+    fn absorb(&mut self, ad: &Array<u8, D::Block>) {
         self.update(D::AesBlock::from_block(ad));
     }
+}
 
+impl<D: AegisParallel> State256X<D> {
     #[inline]
     fn update(&mut self, m: D::AesBlock) {
         let v = self;
@@ -405,7 +399,10 @@ mod tests {
     use hex_literal::hex;
     use hybrid_array::Array;
 
-    use crate::{low::AesBlock, low::IAesBlock};
+    use crate::{
+        low::{AesBlock, IAesBlock},
+        mid::AegisCore,
+    };
 
     use super::State256X;
 
