@@ -1,5 +1,5 @@
 use hybrid_array::{Array, ArraySize};
-use std::ops::{Add, BitAnd, BitXor, BitXorAssign, Sub};
+use std::ops::{Add, BitAnd, BitXor, Sub};
 
 pub trait AegisParallel: hybrid_array::ArraySize {
     type Block2: hybrid_array::ArraySize + Sub<Self::Block, Output = Self::Block>;
@@ -16,7 +16,6 @@ pub trait IAesBlock:
     + Copy
     + From<AesBlock>
     + BitXor<Output = Self>
-    + BitXorAssign
     + BitAnd<Output = Self>
     + Into<Array<u8, Self::Size>>
 {

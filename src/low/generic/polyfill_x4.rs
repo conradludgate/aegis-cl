@@ -1,4 +1,4 @@
-use std::ops::{BitAnd, BitXor, BitXorAssign};
+use std::ops::{BitAnd, BitXor};
 
 use hybrid_array::Array;
 use hybrid_array::sizes::{U2, U4, U32, U64, U128};
@@ -18,7 +18,6 @@ impl AegisParallel for U4 {
     type Block = U64;
 
     type AesBlock = AesBlock4;
-
 }
 
 impl Default for AesBlock4 {
@@ -106,13 +105,6 @@ impl BitXor for AesBlock4 {
         let Self(l0, l1) = self;
         let Self(r0, r1) = rhs;
         Self(l0 ^ r0, l1 ^ r1)
-    }
-}
-
-impl BitXorAssign for AesBlock4 {
-    #[inline(always)]
-    fn bitxor_assign(&mut self, rhs: Self) {
-        *self = *self ^ rhs;
     }
 }
 

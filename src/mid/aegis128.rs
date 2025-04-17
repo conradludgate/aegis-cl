@@ -78,8 +78,8 @@ impl<D: AegisParallel> State128X<D> {
         //     Update(nonce_v, key_v)
         // )
         for _ in 0..10 {
-            v[3] ^= ctx;
-            v[7] ^= ctx;
+            v[3] = v[3] ^ ctx;
+            v[7] = v[7] ^ ctx;
             v.update(nonce, key);
         }
 
@@ -373,8 +373,8 @@ impl<D: AegisParallel> State128X<D> {
         v[1] = v[0].aes(v[1]);
         v[0] = tmp.aes(v[0]);
 
-        v[4] ^= m1;
-        v[0] ^= m0;
+        v[4] = v[4] ^ m1;
+        v[0] = v[0] ^ m0;
     }
 
     #[inline]

@@ -1,5 +1,5 @@
 use std::arch::aarch64::*;
-use std::ops::{BitAnd, BitXor, BitXorAssign};
+use std::ops::{BitAnd, BitXor};
 
 use hybrid_array::Array;
 use hybrid_array::sizes::{U1, U16, U32};
@@ -70,6 +70,7 @@ impl IAesBlock for AesBlock {
     fn reduce_xor(self) -> AesBlock {
         self
     }
+
     #[inline(always)]
     fn from_block(a: &Array<u8, Self::Size>) -> Self {
         AesBlock(unsafe { vld1q_u8(a.as_ptr()) })
@@ -82,13 +83,6 @@ impl BitXor for AesBlock {
     #[inline(always)]
     fn bitxor(self, rhs: Self) -> Self::Output {
         Self(unsafe { veorq_u8(self.0, rhs.0) })
-    }
-}
-
-impl BitXorAssign for AesBlock {
-    #[inline(always)]
-    fn bitxor_assign(&mut self, rhs: Self) {
-        *self = *self ^ rhs;
     }
 }
 
