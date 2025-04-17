@@ -1,5 +1,5 @@
 use std::arch::x86_64::*;
-use std::ops::{BitAnd, BitXor, BitXorAssign};
+use std::ops::{BitAnd, BitXor};
 
 use hybrid_array::Array;
 use hybrid_array::sizes::{U2, U32, U64};
@@ -18,17 +18,6 @@ impl AegisParallel for U2 {
     type Block = U32;
 
     type AesBlock = AesBlock2;
-
-    #[inline(always)]
-    fn split_blocks(a: &Array<u8, Self::Block2>) -> (Self::AesBlock, Self::AesBlock) {
-        let (a01, a23) = a.split_ref::<U32>();
-        (Self::from_block(a01), Self::from_block(a23))
-    }
-
-    #[inline(always)]
-    fn from_block(a: &Array<u8, Self::Block>) -> Self::AesBlock {
-        AesBlock2(unsafe { _mm256_loadu_epi8(a.as_ptr().cast()) })
-    }
 }
 
 impl Default for AesBlock2 {
@@ -69,6 +58,15 @@ impl From<AesBlock2> for Array<AesBlock, U2> {
     }
 }
 
+impl From<AesBlock2> for Array<u8, U32> {
+    #[inline(always)]
+    fn from(val: AesBlock2) -> Self {
+        let mut out = Array::<u8, U32>::default();
+        unsafe { _mm256_storeu_epi8(out.as_mut_ptr().cast(), val.0) }
+        out
+    }
+}
+
 impl IAesBlock for AesBlock2 {
     type Size = U32;
 
@@ -99,10 +97,8 @@ impl IAesBlock for AesBlock2 {
     }
 
     #[inline(always)]
-    fn into_array(self) -> Array<u8, U32> {
-        let mut out = Array::<u8, U32>::default();
-        unsafe { _mm256_storeu_epi8(out.as_mut_ptr().cast(), self.0) }
-        out
+    fn from_block(a: &Array<u8, Self::Size>) -> Self {
+        AesBlock2(unsafe { _mm256_loadu_epi8(a.as_ptr().cast()) })
     }
 }
 
@@ -112,13 +108,6 @@ impl BitXor for AesBlock2 {
     #[inline(always)]
     fn bitxor(self, rhs: Self) -> Self::Output {
         Self(unsafe { _mm256_xor_si256(self.0, rhs.0) })
-    }
-}
-
-impl BitXorAssign for AesBlock2 {
-    #[inline(always)]
-    fn bitxor_assign(&mut self, rhs: Self) {
-        *self = *self ^ rhs;
     }
 }
 
