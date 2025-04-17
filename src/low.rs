@@ -34,6 +34,9 @@ cfg_if::cfg_if! {
     } else if #[cfg(all(target_arch = "x86_64", target_feature = "aes"))] {
         mod x86_64;
         pub use x86_64::AesBlock;
+    } else {
+        mod generic;
+        pub use generic::AesBlock;
     }
 }
 

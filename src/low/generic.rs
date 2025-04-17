@@ -1,6 +1,6 @@
 mod soft;
 
-use soft::AesBlock;
+pub use soft::AesBlock;
 
 mod polyfill_x2;
 
