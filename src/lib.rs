@@ -1,13 +1,18 @@
 #![doc = include_str!("../README.md")]
 #![cfg_attr(all(target_arch = "x86_64"), feature(stdarch_x86_avx512))]
-#![feature(portable_simd)]
+#![deny(unsafe_code)]
+#![deny(clippy::multiple_unsafe_ops_per_block)]
 
 pub use aead;
-pub use hybrid_array;
 pub use digest;
+pub use hybrid_array;
 
-pub type Tag128 = hybrid_array::sizes::U16;
-pub type Tag256 = hybrid_array::sizes::U32;
+pub struct X1;
+pub struct X2;
+pub struct X4;
+
+pub struct Tag128;
+pub struct Tag256;
 
 // *  C0: an AES block built from the following bytes in hexadecimal
 // format: { 0x00, 0x01, 0x01, 0x02, 0x03, 0x05, 0x08, 0x0d, 0x15,
@@ -25,12 +30,12 @@ const C1: Array<u8, hybrid_array::sizes::U16> = Array([
 
 use hybrid_array::Array;
 
+pub mod high;
 pub mod low;
 pub mod mid;
-pub mod high;
 
-pub use low::AegisParallel;
 pub use mid::AegisCore;
+pub use mid::AegisParallel;
 
 pub use high::aegis128::{
     Aegis128L, Aegis128X, Aegis128X2, Aegis128X4, AegisMac128L, AegisMac128X, AegisMac128X2,

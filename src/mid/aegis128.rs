@@ -1,19 +1,24 @@
 use std::ops::{Index, IndexMut};
 
-use aead::{consts::U32, inout::InOut};
-use hybrid_array::{
-    Array,
-    sizes::{U1, U16},
-};
+use aead::inout::InOut;
+use digest::typenum::Unsigned;
+use hybrid_array::{Array, sizes::U16};
 
 use super::{AegisCore, util};
 use crate::{
-    AegisParallel, C0, C1,
+    AegisParallel, C0, C1, X1,
     low::{AesBlock, IAesBlock},
 };
 
-#[derive(Clone, Copy)]
 pub struct State128X<D: AegisParallel>([D::AesBlock; 8]);
+
+impl<D: AegisParallel> Clone for State128X<D> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl<D: AegisParallel> Copy for State128X<D> {}
 
 impl<D: AegisParallel> Index<usize> for State128X<D> {
     type Output = D::AesBlock;
@@ -31,7 +36,7 @@ impl<D: AegisParallel> IndexMut<usize> for State128X<D> {
 
 impl<D: AegisParallel> AegisCore for State128X<D> {
     type Key = U16;
-    type Block = D::Block2;
+    type Block = <D::AesBlock as IAesBlock>::Block2;
 
     #[inline(always)]
     fn new(key: &Array<u8, U16>, iv: &Array<u8, U16>) -> Self {
@@ -65,7 +70,7 @@ impl<D: AegisParallel> AegisCore for State128X<D> {
 
         // for i in 0..D:
         //     ctx[i] = ZeroPad(Byte(i) || Byte(D - 1), 128)
-        let ctx = util::ctx::<D>();
+        let ctx = D::ctx();
 
         let key = D::AesBlock::from(key);
         let nonce = D::AesBlock::from(nonce);
@@ -87,7 +92,7 @@ impl<D: AegisParallel> AegisCore for State128X<D> {
     }
 
     #[inline(always)]
-    fn encrypt_block(&mut self, mut block: InOut<'_, '_, Array<u8, D::Block2>>) {
+    fn encrypt_block(&mut self, mut block: InOut<'_, '_, Array<u8, Self::Block>>) {
         let v = self;
         // z0 = {}
         // z1 = {}
@@ -99,7 +104,7 @@ impl<D: AegisParallel> AegisCore for State128X<D> {
 
         // t0, t1 = Split(xi, R)
         let xi = block.get_in();
-        let (t0, t1) = util::split_blocks::<D>(xi);
+        let (t0, t1) = util::split_blocks(xi);
 
         // out0 = t0 ^ z0
         // out1 = t1 ^ z1
@@ -111,11 +116,11 @@ impl<D: AegisParallel> AegisCore for State128X<D> {
 
         // ci = out0 || out1
         let ci = block.get_out();
-        write::<D>(out0, out1, ci);
+        write(out0, out1, ci);
     }
 
     #[inline(always)]
-    fn decrypt_block(&mut self, mut block: InOut<'_, '_, Array<u8, D::Block2>>) {
+    fn decrypt_block(&mut self, mut block: InOut<'_, '_, Array<u8, Self::Block>>) {
         let v = self;
 
         // z0 = {}
@@ -128,7 +133,7 @@ impl<D: AegisParallel> AegisCore for State128X<D> {
 
         // t0, t1 = Split(ci, R)
         let ci = block.get_in();
-        let (t0, t1) = util::split_blocks::<D>(ci);
+        let (t0, t1) = util::split_blocks::<D::AesBlock>(ci);
 
         // out0 = t0 ^ z0
         // out1 = t1 ^ z1
@@ -140,13 +145,13 @@ impl<D: AegisParallel> AegisCore for State128X<D> {
 
         // xi = out0 || out1
         let xi = block.get_out();
-        write::<D>(out0, out1, xi);
+        write(out0, out1, xi);
     }
 
     #[inline(always)]
     fn decrypt_partial_block(
         &mut self,
-        mut padded_block: InOut<'_, '_, Array<u8, D::Block2>>,
+        mut padded_block: InOut<'_, '_, Array<u8, Self::Block>>,
         len: usize,
     ) {
         let v = self;
@@ -161,7 +166,7 @@ impl<D: AegisParallel> AegisCore for State128X<D> {
 
         // t0, t1 = Split(ZeroPad(cn, R), 128 * D)
         let cn = padded_block.get_in();
-        let (t0, t1) = util::split_blocks::<D>(cn);
+        let (t0, t1) = util::split_blocks::<D::AesBlock>(cn);
 
         // out0 = t0 ^ z0
         // out1 = t1 ^ z1
@@ -170,16 +175,16 @@ impl<D: AegisParallel> AegisCore for State128X<D> {
 
         // xn = Truncate(out0 || out1, |cn|)
         let xn = padded_block.get_out();
-        write::<D>(out0, out1, xn);
+        write(out0, out1, xn);
         xn[len..].fill(0);
 
         // v0, v1 = Split(ZeroPad(xn, R), 128 * D)
-        let (v0, v1) = util::split_blocks::<D>(xn);
+        let (v0, v1) = util::split_blocks(xn);
         v.update(v0, v1);
     }
 
     #[inline(always)]
-    fn finalize128(mut self, ad_len_bits: u64, msg_len_bits: u64) -> Array<u8, U16> {
+    fn finalize128(mut self, ad_len_bits: u64, msg_len_bits: u64) -> [u8; 16] {
         // t = {}
         // u = LE64(ad_len_bits) || LE64(msg_len_bits)
         let u = util::concatu64(ad_len_bits, msg_len_bits).into();
@@ -201,7 +206,7 @@ impl<D: AegisParallel> AegisCore for State128X<D> {
     }
 
     #[inline(always)]
-    fn finalize_mac128(mut self, data_len_bits: u64) -> Array<u8, U16> {
+    fn finalize_mac128(mut self, data_len_bits: u64) -> [u8; 16] {
         // t = {}
         // u = LE64(data_len_bits) || LE64(tag_len_bits)
         let u = util::concatu64(data_len_bits, 128).into();
@@ -215,26 +220,26 @@ impl<D: AegisParallel> AegisCore for State128X<D> {
             self.update(t, t);
         }
 
-        let v = if D::USIZE > 1 {
+        let v = if <D::Blocks as Unsigned>::USIZE > 1 {
             //     for i in 0..D: # tag from state 0 is included
             //         ti = V[0,i] ^ V[1,i] ^ V[2,i] ^ V[3,i] ^ V[4,i] ^ V[5,i] ^ V[6,i]
             //         tags = tags || ti
-            let tags: Array<AesBlock, D> = self.fold_tag128().into();
+            let tags: Array<AesBlock, D::Blocks> = self.fold_tag128().into();
 
             // # Absorb tags into state 0; other states are not used anymore
-            let mut v = State128X::<U1>(self.0.map(|s| s.first()));
+            let mut v = State128X::<X1>(self.0.map(|s| s.first()));
 
             // for v in Split(tags, 256):
             //     x0, x1 = Split(v, 128)
             //     Absorb(ZeroPad(x0, R / 2) || ZeroPad(x1, R / 2))
-            for i in 0..D::USIZE / 2 {
+            for i in 0..<D::Blocks as Unsigned>::USIZE / 2 {
                 let x0 = tags[2 * i];
                 let x1 = tags[2 * i + 1];
                 v.update(x0, x1);
             }
 
             // u = LE64(D) || LE64(tag_len_bits)
-            let u = util::concatu64(D::U64, 128);
+            let u = util::concatu64(<D::Blocks as Unsigned>::U64, 128);
 
             // t = ZeroPad(V[2,0] ^ u, R)
             let t = v[2].first() ^ u;
@@ -247,7 +252,7 @@ impl<D: AegisParallel> AegisCore for State128X<D> {
             v
         } else {
             // should be a noop.
-            State128X::<U1>(self.0.map(|s| s.first()))
+            State128X::<X1>(self.0.map(|s| s.first()))
         };
 
         //     tag = V[0,0] ^ V[1,0] ^ V[2,0] ^ V[3,0] ^ V[4,0] ^ V[5,0] ^ V[6,0]
@@ -255,7 +260,7 @@ impl<D: AegisParallel> AegisCore for State128X<D> {
     }
 
     #[inline(always)]
-    fn finalize256(mut self, ad_len_bits: u64, msg_len_bits: u64) -> Array<u8, U32> {
+    fn finalize256(mut self, ad_len_bits: u64, msg_len_bits: u64) -> [u8; 32] {
         // t = {}
         // u = LE64(ad_len_bits) || LE64(msg_len_bits)
         let u = util::concatu64(ad_len_bits, msg_len_bits).into();
@@ -279,11 +284,11 @@ impl<D: AegisParallel> AegisCore for State128X<D> {
         let ti1 = ti1.reduce_xor();
 
         //     tag = ti0 || ti1
-        util::join_blocks::<U1>(ti0, ti1)
+        util::join_block(ti0, ti1)
     }
 
     #[inline(always)]
-    fn finalize_mac256(mut self, data_len_bits: u64) -> Array<u8, U32> {
+    fn finalize_mac256(mut self, data_len_bits: u64) -> [u8; 32] {
         // t = {}
         // u = LE64(data_len_bits) || LE64(tag_len_bits)
         let u = util::concatu64(data_len_bits, 256).into();
@@ -297,29 +302,29 @@ impl<D: AegisParallel> AegisCore for State128X<D> {
             self.update(t, t);
         }
 
-        let v = if D::USIZE > 1 {
+        let v = if <D::Blocks as Unsigned>::USIZE > 1 {
             //     for i in 1..D: # tag from state 0 is skipped
             //         ti0 = V[0,i] ^ V[1,i] ^ V[2,i] ^ V[3,i]
             //         ti1 = V[4,i] ^ V[5,i] ^ V[6,i] ^ V[7,i]
             //         tags = tags || (ti0 || ti1)
             let [tags0, tags1] = self.fold_tag256();
-            let tags0: Array<AesBlock, D> = tags0.into();
-            let tags1: Array<AesBlock, D> = tags1.into();
+            let tags0: Array<AesBlock, D::Blocks> = tags0.into();
+            let tags1: Array<AesBlock, D::Blocks> = tags1.into();
 
             // # Absorb tags into state 0; other states are not used anymore
-            let mut v = State128X::<U1>(self.0.map(|s| s.first()));
+            let mut v = State128X::<X1>(self.0.map(|s| s.first()));
 
             // for v in Split(tags, 256):
             //     x0, x1 = Split(v, 128)
             //     Absorb(ZeroPad(x0, R / 2) || ZeroPad(x1, R / 2))
-            for i in 0..D::USIZE {
+            for i in 0..<D::Blocks as Unsigned>::USIZE {
                 let x0 = tags0[i];
                 let x1 = tags1[i];
                 v.update(x0, x1);
             }
 
             // u = LE64(D) || LE64(tag_len_bits)
-            let u = util::concatu64(D::U64, 256);
+            let u = util::concatu64(<D::Blocks as Unsigned>::U64, 256);
 
             // t = ZeroPad(V[2,0] ^ u, R)
             let t = v[2].first() ^ u;
@@ -332,19 +337,19 @@ impl<D: AegisParallel> AegisCore for State128X<D> {
             v
         } else {
             // should be a noop.
-            State128X::<U1>(self.0.map(|s| s.first()))
+            State128X::<X1>(self.0.map(|s| s.first()))
         };
 
         //     t0 = V[0,0] ^ V[1,0] ^ V[2,0] ^ V[3,0]
         //     t1 = V[4,0] ^ V[5,0] ^ V[6,0] ^ V[7,0]
         //     tag = t0 || t1
         let [t0, t1] = v.fold_tag256();
-        util::join_blocks::<U1>(t0, t1)
+        util::join_block(t0, t1)
     }
 
     #[inline(always)]
-    fn absorb(&mut self, ad: &Array<u8, D::Block2>) {
-        let (t0, t1) = util::split_blocks::<D>(ad);
+    fn absorb(&mut self, ad: &Array<u8, <D::AesBlock as IAesBlock>::Block2>) {
+        let (t0, t1) = util::split_blocks(ad);
         self.update(t0, t1);
     }
 }
@@ -392,7 +397,7 @@ impl<D: AegisParallel> State128X<D> {
 }
 
 #[inline(always)]
-fn write<D: AegisParallel>(a: D::AesBlock, b: D::AesBlock, out: &mut Array<u8, D::Block2>) {
+fn write<D: IAesBlock>(a: D, b: D, out: &mut Array<u8, D::Block2>) {
     let (p0, p1) = out.split_ref_mut::<D::Block>();
     *p0 = a.into();
     *p1 = b.into();
@@ -400,12 +405,11 @@ fn write<D: AegisParallel>(a: D::AesBlock, b: D::AesBlock, out: &mut Array<u8, D
 
 #[cfg(test)]
 mod tests {
-    use std::mem::transmute;
-
-    use aead::consts::{U1, U2, U4};
     use hex_literal::hex;
     use hybrid_array::Array;
+    use hybrid_array::sizes::{U2, U4, U16};
 
+    use crate::{X1, X2, X4};
     use crate::{
         low::{AesBlock, IAesBlock},
         mid::AegisCore,
@@ -417,7 +421,7 @@ mod tests {
     #[test]
     #[rustfmt::skip]
     fn update() {
-        let mut s: State128X<U1> = State128X([
+        let mut s: State128X<X1> = State128X([
             AesBlock::from_block(&Array(hex!("9b7e60b24cc873ea894ecc07911049a3"))),
             AesBlock::from_block(&Array(hex!("330be08f35300faa2ebf9a7b0d274658"))),
             AesBlock::from_block(&Array(hex!("7bbd5bd2b049f7b9b515cf26fbe7756c"))),
@@ -433,7 +437,7 @@ mod tests {
 
         s.update(m0, m1);
 
-        let s: [[u8; 16]; 8] = unsafe { transmute(s) };
+        let s: [[u8; 16]; 8] = s.0.map(|b| Array::<u8, U16>::from(b).0);
 
         assert_eq!(s[0], hex!("596ab773e4433ca0127c73f60536769d"));
         assert_eq!(s[1], hex!("790394041a3d26ab697bde865014652d"));
@@ -452,8 +456,8 @@ mod tests {
         let key = Array(hex!("000102030405060708090a0b0c0d0e0f"));
         let nonce = Array(hex!("101112131415161718191a1b1c1d1e1f"));
 
-        let v = State128X::<U2>::new(&key, &nonce);
-        let v: [[[u8; 16]; 2]; 8] = unsafe { transmute(v) };
+        let v = State128X::<X2>::new(&key, &nonce);
+        let v: [[[u8; 16]; 2]; 8] = v.0.map(|b| Array::<AesBlock, U2>::from(b).0).map(|b| b.map(|b| Array::<u8, U16>::from(b).0));
 
         assert_eq!(v[0][0], hex!("a4fc1ad9a72942fb88bd2cabbba6509a"));
         assert_eq!(v[0][1], hex!("80a40e392fc71084209b6c3319bdc6cc"));
@@ -487,8 +491,8 @@ mod tests {
         let key = Array(hex!("000102030405060708090a0b0c0d0e0f"));
         let nonce = Array(hex!("101112131415161718191a1b1c1d1e1f"));
 
-        let v = State128X::<U4>::new(&key, &nonce);
-        let v: [[[u8; 16]; 4]; 8] = unsafe { transmute(v) };
+        let v = State128X::<X4>::new(&key, &nonce);
+        let v: [[[u8; 16]; 4]; 8] = v.0.map(|b| Array::<AesBlock, U4>::from(b).0).map(|b| b.map(|b| Array::<u8, U16>::from(b).0));
 
         assert_eq!(v[0][0], hex!("924eb07635003a37e6c6575ba8ce1929"));
         assert_eq!(v[0][1], hex!("c8b6a5d91475445e936d48e794be0ce2"));

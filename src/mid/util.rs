@@ -1,34 +1,21 @@
 use hybrid_array::Array;
 
-use crate::{
-    AegisParallel,
-    low::{AesBlock, IAesBlock},
-};
+use crate::low::{AesBlock, IAesBlock};
 
 #[inline(always)]
-pub fn join_blocks<D: AegisParallel>(a: D::AesBlock, b: D::AesBlock) -> Array<u8, D::Block2> {
-    let a: Array<u8, D::Block> = a.into();
-    let b: Array<u8, D::Block> = b.into();
-    a.concat(b)
+pub fn join_block(a: AesBlock, b: AesBlock) -> [u8; 32] {
+    let a: [u8; 16] = a.into();
+    let b: [u8; 16] = b.into();
+    let mut ab = [0; 32];
+    ab[..16].copy_from_slice(&a);
+    ab[16..].copy_from_slice(&b);
+    ab
 }
 
 #[inline(always)]
-pub fn split_blocks<D: AegisParallel>(a: &Array<u8, D::Block2>) -> (D::AesBlock, D::AesBlock) {
+pub fn split_blocks<D: IAesBlock>(a: &Array<u8, D::Block2>) -> (D, D) {
     let (a0, a1) = a.split_ref::<D::Block>();
-    (
-        <D::AesBlock as IAesBlock>::from_block(a0),
-        <D::AesBlock as IAesBlock>::from_block(a1),
-    )
-}
-
-pub fn ctx<D: AegisParallel>() -> D::AesBlock {
-    Array::from_fn(|i| {
-        let mut a = Array([0; 16]);
-        a[0] = i as u8;
-        a[1] = D::U8 - 1;
-        AesBlock::from_block(&a)
-    })
-    .into()
+    (D::from_block(a0), D::from_block(a1))
 }
 
 #[inline(always)]

@@ -3,7 +3,6 @@ use std::ops::{BitAnd, BitXor};
 use hybrid_array::Array;
 use hybrid_array::sizes::{U2, U16, U32, U64};
 
-use crate::AegisParallel;
 use crate::low::IAesBlock;
 
 use super::AesBlock;
@@ -12,25 +11,10 @@ use super::AesBlock;
 #[repr(C)]
 pub struct AesBlock2(AesBlock, AesBlock);
 
-impl AegisParallel for U2 {
-    type Block2 = U64;
-    type Block = U32;
-
-    type AesBlock = AesBlock2;
-}
-
 impl From<AesBlock> for AesBlock2 {
     #[inline(always)]
     fn from(a: AesBlock) -> Self {
         Self(a, a)
-    }
-}
-
-impl From<Array<AesBlock, U2>> for AesBlock2 {
-    #[inline(always)]
-    fn from(value: Array<AesBlock, U2>) -> Self {
-        let Array([a, b]) = value;
-        Self(a, b)
     }
 }
 
@@ -51,7 +35,8 @@ impl From<AesBlock2> for Array<u8, U32> {
 }
 
 impl IAesBlock for AesBlock2 {
-    type Size = U32;
+    type Block = U32;
+    type Block2 = U64;
 
     #[inline(always)]
     fn aes(self, key: Self) -> Self {
@@ -73,7 +58,7 @@ impl IAesBlock for AesBlock2 {
     }
 
     #[inline(always)]
-    fn from_block(a: &Array<u8, Self::Size>) -> Self {
+    fn from_block(a: &Array<u8, Self::Block>) -> Self {
         let (a0, a1) = a.split_ref::<U16>();
         AesBlock2(AesBlock::from_block(a0), AesBlock::from_block(a1))
     }

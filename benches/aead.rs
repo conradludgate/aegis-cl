@@ -90,8 +90,8 @@ mod aegis_cl {
 
     use std::hint::black_box;
 
-    use aead::{AeadInOut, KeyInit, consts::U16, inout::InOutBuf};
-    use aegis_cl::{Aegis128L, Aegis128X2, Aegis128X4, Aegis256, Aegis256X2, Aegis256X4};
+    use aead::{AeadInOut, KeyInit, inout::InOutBuf};
+    use aegis_cl::{Aegis128L, Aegis128X2, Aegis128X4, Aegis256, Aegis256X2, Aegis256X4, Tag128};
 
     #[divan::bench]
     fn aegis128l(b: Bencher) {
@@ -100,7 +100,7 @@ mod aegis_cl {
         let nonce = [0u8; 16];
 
         b.counter(BytesCount::of_slice(&m)).bench_local(|| {
-            let state = Aegis128L::<U16>::new(&black_box(key).into());
+            let state = Aegis128L::<Tag128>::new(&black_box(key).into());
             state.encrypt_inout_detached(
                 &black_box(nonce).into(),
                 &[],
@@ -115,7 +115,7 @@ mod aegis_cl {
         let nonce = [0u8; 16];
 
         b.counter(BytesCount::of_slice(&m)).bench_local(|| {
-            let state = Aegis128X2::<U16>::new(&black_box(key).into());
+            let state = Aegis128X2::<Tag128>::new(&black_box(key).into());
             state.encrypt_inout_detached(
                 &black_box(nonce).into(),
                 &[],
@@ -130,7 +130,7 @@ mod aegis_cl {
         let nonce = [0u8; 16];
 
         b.counter(BytesCount::of_slice(&m)).bench_local(|| {
-            let state = Aegis128X4::<U16>::new(&black_box(key).into());
+            let state = Aegis128X4::<Tag128>::new(&black_box(key).into());
             state.encrypt_inout_detached(
                 &black_box(nonce).into(),
                 &[],
@@ -145,7 +145,7 @@ mod aegis_cl {
         let nonce = [0u8; 32];
 
         b.counter(BytesCount::of_slice(&m)).bench_local(|| {
-            let state = Aegis256::<U16>::new(&black_box(key).into());
+            let state = Aegis256::<Tag128>::new(&black_box(key).into());
             state.encrypt_inout_detached(
                 &black_box(nonce).into(),
                 &[],
@@ -160,7 +160,7 @@ mod aegis_cl {
         let nonce = [0u8; 32];
 
         b.counter(BytesCount::of_slice(&m)).bench_local(|| {
-            let state = Aegis256X2::<U16>::new(&black_box(key).into());
+            let state = Aegis256X2::<Tag128>::new(&black_box(key).into());
             state.encrypt_inout_detached(
                 &black_box(nonce).into(),
                 &[],
@@ -175,7 +175,7 @@ mod aegis_cl {
         let nonce = [0u8; 32];
 
         b.counter(BytesCount::of_slice(&m)).bench_local(|| {
-            let state = Aegis256X4::<U16>::new(&black_box(key).into());
+            let state = Aegis256X4::<Tag128>::new(&black_box(key).into());
             state.encrypt_inout_detached(
                 &black_box(nonce).into(),
                 &[],

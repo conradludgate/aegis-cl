@@ -3,8 +3,8 @@ use std::ops::{BitAnd, BitXor};
 use hybrid_array::Array;
 use hybrid_array::sizes::{U1, U16, U32};
 
-use crate::low::IAesBlock;
 use crate::AegisParallel;
+use crate::low::IAesBlock;
 
 impl AegisParallel for U1 {
     type Block2 = U32;

@@ -6,7 +6,6 @@ use std::ops::{BitAnd, BitXor};
 use hybrid_array::Array;
 use hybrid_array::sizes::{U2, U4, U64, U128};
 
-use crate::AegisParallel;
 use crate::low::IAesBlock;
 
 use super::AesBlock;
@@ -16,32 +15,14 @@ use super::avx2_x2::AesBlock2;
 #[repr(transparent)]
 pub struct AesBlock4(__m512i);
 
-impl AegisParallel for U4 {
-    type Block2 = U128;
-    type Block = U64;
-
-    type AesBlock = AesBlock4;
-}
-
 impl From<AesBlock> for AesBlock4 {
     #[inline(always)]
     fn from(v: AesBlock) -> Self {
-        Self::from(Array([v, v, v, v]))
-    }
-}
-
-impl From<Array<AesBlock, U4>> for AesBlock4 {
-    #[inline(always)]
-    fn from(value: Array<AesBlock, U4>) -> Self {
-        let Array([a, b, c, d]) = value;
-
-        let ab = AesBlock2::from(Array([a, b]));
-        let cd = AesBlock2::from(Array([c, d]));
-
+        let vv = AesBlock2::from([v, v]);
         // Safety: we require target_feature = "avx512f".
-        let r = unsafe { _mm512_castsi256_si512(ab.0) };
+        let r = unsafe { _mm512_castsi256_si512(vv.0) };
         // Safety: we require target_feature = "avx512f".
-        let r = unsafe { _mm512_inserti64x4::<1>(r, cd.0) };
+        let r = unsafe { _mm512_inserti64x4::<1>(r, vv.0) };
         Self(r)
     }
 }
@@ -69,7 +50,8 @@ impl From<AesBlock4> for Array<u8, U64> {
 }
 
 impl IAesBlock for AesBlock4 {
-    type Size = U64;
+    type Block = U64;
+    type Block2 = U128;
 
     #[inline(always)]
     fn aes(self, key: Self) -> Self {
@@ -95,7 +77,7 @@ impl IAesBlock for AesBlock4 {
     }
 
     #[inline(always)]
-    fn from_block(a: &Array<u8, Self::Size>) -> Self {
+    fn from_block(a: &Array<u8, Self::Block>) -> Self {
         // Safety: both types are equivalent, and transmute does not care about alignment.
         Self(unsafe { core::mem::transmute::<[u8; 64], __m512i>(a.0) })
     }

@@ -1,35 +1,27 @@
-use crate::mid::aegis128::State128X;
-use hybrid_array::sizes::{U1, U2, U4};
+use crate::{X1, X2, X4, mid::aegis128::State128X};
 
 use super::{Aegis, AegisMac};
 
 pub type Aegis128X<D, T> = Aegis<State128X<D>, T>;
 
-pub type Aegis128L<T> = Aegis128X<U1, T>;
-pub type Aegis128X2<T> = Aegis128X<U2, T>;
-pub type Aegis128X4<T> = Aegis128X<U4, T>;
+pub type Aegis128L<T> = Aegis128X<X1, T>;
+pub type Aegis128X2<T> = Aegis128X<X2, T>;
+pub type Aegis128X4<T> = Aegis128X<X4, T>;
 
 pub type AegisMac128X<D, T> = AegisMac<State128X<D>, T>;
 
-pub type AegisMac128L<T> = AegisMac128X<U1, T>;
-pub type AegisMac128X2<T> = AegisMac128X<U2, T>;
-pub type AegisMac128X4<T> = AegisMac128X<U4, T>;
+pub type AegisMac128L<T> = AegisMac128X<X1, T>;
+pub type AegisMac128X2<T> = AegisMac128X<X2, T>;
+pub type AegisMac128X4<T> = AegisMac128X<X4, T>;
 
 #[cfg(test)]
 mod tests {
     use aead::{Aead, AeadInOut, Key, KeyInit, Nonce, Payload, Tag, inout::InOutBuf};
-    use digest::{
-        Mac, Output,
-        crypto_common::{Iv, KeyIvInit},
-    };
-    use hex_literal::hex;
-    use hybrid_array::sizes::{U1, U2, U4, U16};
-    use hybrid_array::{Array, ArraySize};
 
     use super::AegisMac128X;
-    use crate::{Aegis128X, AegisParallel};
+    use crate::{Aegis128X, AegisParallel, high::AegisTag};
 
-    fn test_roundtrip<D: AegisParallel, T: ArraySize>(
+    fn test_roundtrip<D: AegisParallel, T: AegisTag>(
         key: Key<Aegis128X<D, T>>,
         nonce: Nonce<Aegis128X<D, T>>,
         aad: &[u8],
@@ -60,7 +52,7 @@ mod tests {
         assert_eq!(decrypted, msg);
     }
 
-    fn test_decrypt_fail<D: AegisParallel, T: ArraySize>(
+    fn test_decrypt_fail<D: AegisParallel, T: AegisTag>(
         key: Key<Aegis128X<D, T>>,
         nonce: Nonce<Aegis128X<D, T>>,
         aad: &[u8],
@@ -80,7 +72,8 @@ mod tests {
     mod aegis128l {
         use hex_literal::hex;
         use hybrid_array::Array;
-        use hybrid_array::sizes::{U1, U16};
+
+        use crate::{Tag128, X1};
 
         use super::{test_decrypt_fail, test_roundtrip};
 
@@ -96,7 +89,7 @@ mod tests {
             // tag256: 25835bfbb21632176cf03840687cb968
             //         cace4617af1bd0f7d064c639a5c79ee4
 
-            test_roundtrip::<U1, U16>(key, nonce, &ad, &msg, &ct, tag128);
+            test_roundtrip::<X1, Tag128>(key, nonce, &ad, &msg, &ct, tag128);
         }
 
         #[test]
@@ -111,7 +104,7 @@ mod tests {
             // tag256: 1360dc9db8ae42455f6e5b6a9d488ea4
             //         f2184c4e12120249335c4ee84bafe25d
 
-            test_roundtrip::<U1, U16>(key, nonce, &ad, &msg, &ct, tag128);
+            test_roundtrip::<X1, Tag128>(key, nonce, &ad, &msg, &ct, tag128);
         }
 
         #[test]
@@ -132,7 +125,7 @@ mod tests {
             // tag256: 022cb796fe7e0ae1197525ff67e30948
             //         4cfbab6528ddef89f17d74ef8ecd82b3
 
-            test_roundtrip::<U1, U16>(key, nonce, &ad, &msg, &ct, tag128);
+            test_roundtrip::<X1, Tag128>(key, nonce, &ad, &msg, &ct, tag128);
         }
 
         #[test]
@@ -147,7 +140,7 @@ mod tests {
             // tag256: 86f1b80bfb463aba711d15405d094baf
             //         4a55a15dbfec81a76f35ed0b9c8b04ac
 
-            test_roundtrip::<U1, U16>(key, nonce, &ad, &msg, &ct, tag128);
+            test_roundtrip::<X1, Tag128>(key, nonce, &ad, &msg, &ct, tag128);
         }
 
         #[test]
@@ -174,7 +167,7 @@ mod tests {
             // tag256: b91e2947a33da8bee89b6794e647baf0
             //         fc835ff574aca3fc27c33be0db2aff98
 
-            test_roundtrip::<U1, U16>(key, nonce, &ad, &msg, &ct, tag128);
+            test_roundtrip::<X1, Tag128>(key, nonce, &ad, &msg, &ct, tag128);
         }
 
         #[test]
@@ -188,7 +181,7 @@ mod tests {
             let tag128 = Array(hex!("5c04b3dba849b2701effbe32c7f0fab7"));
             // tag256: 86f1b80bfb463aba711d15405d094baf
             //         4a55a15dbfec81a76f35ed0b9c8b04ac
-            test_decrypt_fail::<U1, U16>(key, nonce, &ad, &ct, tag128);
+            test_decrypt_fail::<X1, Tag128>(key, nonce, &ad, &ct, tag128);
         }
 
         #[test]
@@ -203,7 +196,7 @@ mod tests {
             // tag256: 86f1b80bfb463aba711d15405d094baf
             //         4a55a15dbfec81a76f35ed0b9c8b04ac
 
-            test_decrypt_fail::<U1, U16>(key, nonce, &ad, &ct, tag128);
+            test_decrypt_fail::<X1, Tag128>(key, nonce, &ad, &ct, tag128);
         }
 
         #[test]
@@ -218,7 +211,7 @@ mod tests {
             // tag256: 86f1b80bfb463aba711d15405d094baf
             //         4a55a15dbfec81a76f35ed0b9c8b04ac
 
-            test_decrypt_fail::<U1, U16>(key, nonce, &ad, &ct, tag128);
+            test_decrypt_fail::<X1, Tag128>(key, nonce, &ad, &ct, tag128);
         }
 
         #[test]
@@ -233,14 +226,15 @@ mod tests {
             // tag256: 86f1b80bfb463aba711d15405d094baf
             //         4a55a15dbfec81a76f35ed0b9c8b04ad
 
-            test_decrypt_fail::<U1, U16>(key, nonce, &ad, &ct, tag128);
+            test_decrypt_fail::<X1, Tag128>(key, nonce, &ad, &ct, tag128);
         }
     }
 
     mod aegis128x2 {
         use hex_literal::hex;
         use hybrid_array::Array;
-        use hybrid_array::sizes::{U2, U16};
+
+        use crate::{Tag128, X2};
 
         use super::test_roundtrip;
 
@@ -256,7 +250,7 @@ mod tests {
             // tag256: b92c71fdbd358b8a4de70b27631ace90
             //         cffd9b9cfba82028412bac41b4f53759
 
-            test_roundtrip::<U2, U16>(key, nonce, &ad, &msg, &ct, tag128);
+            test_roundtrip::<X2, Tag128>(key, nonce, &ad, &msg, &ct, tag128);
         }
 
         #[test]
@@ -289,14 +283,15 @@ mod tests {
             // tag256: c471876f9b4978c44f2ae1ce770cdb11
             //         a094ee3feca64e7afcd48bfe52c60eca
 
-            test_roundtrip::<U2, U16>(key, nonce, &ad, &msg, &ct, tag128);
+            test_roundtrip::<X2, Tag128>(key, nonce, &ad, &msg, &ct, tag128);
         }
     }
 
     mod aegis128x4 {
         use hex_literal::hex;
         use hybrid_array::Array;
-        use hybrid_array::sizes::{U4, U16};
+
+        use crate::{Tag128, X4};
 
         use super::test_roundtrip;
 
@@ -312,7 +307,7 @@ mod tests {
             // tag256: a4b25437f4be93cfa856a2f27e4416b4
             //         2cac79fd4698f2cdbe6af25673e10a68
 
-            test_roundtrip::<U4, U16>(key, nonce, &ad, &msg, &ct, tag128);
+            test_roundtrip::<X4, Tag128>(key, nonce, &ad, &msg, &ct, tag128);
         }
 
         #[test]
@@ -345,66 +340,78 @@ mod tests {
             // tag256: 69abf0f64a137dd6e122478d777e98bc
             //         422823006cf57f5ee822dd78397230b2
 
-            test_roundtrip::<U4, U16>(key, nonce, &ad, &msg, &ct, tag128);
+            test_roundtrip::<X4, Tag128>(key, nonce, &ad, &msg, &ct, tag128);
         }
     }
 
-    fn test_mac<D: AegisParallel, T>(
-        key: Key<AegisMac128X<D, T>>,
-        iv: Iv<AegisMac128X<D, T>>,
-        data: &[u8],
-        tag: Output<AegisMac128X<D, T>>,
-    ) where
-        AegisMac128X<D, T>: Mac,
-    {
-        AegisMac128X::<D, T>::new(&key, &iv)
-            .chain_update(data)
-            .verify(&tag)
-            .unwrap();
-    }
+    mod mac {
+        use digest::{
+            Key, Mac, Output,
+            crypto_common::{Iv, KeyIvInit},
+        };
+        use hex_literal::hex;
+        use hybrid_array::Array;
 
-    #[test]
-    /// <https://www.ietf.org/archive/id/draft-irtf-cfrg-aegis-aead-16.html#appendix-A.8.1>
-    fn test_aegismac_128l() {
-        let key = Array(hex!("10010000000000000000000000000000"));
-        let iv = Array(hex!("10000200000000000000000000000000"));
-        let data = hex!(
-            "000102030405060708090a0b0c0d0e0f"
-            "101112131415161718191a1b1c1d1e1f"
-            "202122"
-        );
-        let tag128 = Array(hex!("d3f09b2842ad301687d6902c921d7818"));
+        use super::AegisMac128X;
+        use crate::{AegisParallel, Tag128, X1, X2, X4, high::AegisTag};
 
-        test_mac::<U1, U16>(key, iv, &data, tag128);
-    }
+        fn test_mac<D: AegisParallel, T: AegisTag>(
+            key: Key<AegisMac128X<D, T>>,
+            iv: Iv<AegisMac128X<D, T>>,
+            data: &[u8],
+            tag: Output<AegisMac128X<D, T>>,
+        ) where
+            AegisMac128X<D, T>: Mac,
+        {
+            AegisMac128X::<D, T>::new(&key, &iv)
+                .chain_update(data)
+                .verify(&tag)
+                .unwrap();
+        }
 
-    #[test]
-    /// <https://www.ietf.org/archive/id/draft-irtf-cfrg-aegis-aead-16.html#appendix-A.8.2>
-    fn test_aegismac_128_x2() {
-        let key = Array(hex!("10010000000000000000000000000000"));
-        let iv = Array(hex!("10000200000000000000000000000000"));
-        let data = hex!(
-            "000102030405060708090a0b0c0d0e0f"
-            "101112131415161718191a1b1c1d1e1f"
-            "202122"
-        );
-        let tag128 = Array(hex!("6873ee34e6b5c59143b6d35c5e4f2c6e"));
+        #[test]
+        /// <https://www.ietf.org/archive/id/draft-irtf-cfrg-aegis-aead-16.html#appendix-A.8.1>
+        fn test_aegismac_128l() {
+            let key = Array(hex!("10010000000000000000000000000000"));
+            let iv = Array(hex!("10000200000000000000000000000000"));
+            let data = hex!(
+                "000102030405060708090a0b0c0d0e0f"
+                "101112131415161718191a1b1c1d1e1f"
+                "202122"
+            );
+            let tag128 = Array(hex!("d3f09b2842ad301687d6902c921d7818"));
 
-        test_mac::<U2, U16>(key, iv, &data, tag128);
-    }
+            test_mac::<X1, Tag128>(key, iv, &data, tag128);
+        }
 
-    #[test]
-    /// <https://www.ietf.org/archive/id/draft-irtf-cfrg-aegis-aead-16.html#appendix-A.8.3>
-    fn test_aegismac_128_x4() {
-        let key = Array(hex!("10010000000000000000000000000000"));
-        let iv = Array(hex!("10000200000000000000000000000000"));
-        let data = hex!(
-            "000102030405060708090a0b0c0d0e0f"
-            "101112131415161718191a1b1c1d1e1f"
-            "202122"
-        );
-        let tag128 = Array(hex!("c45a98fd9ab8956ce616eb008cfe4e53"));
+        #[test]
+        /// <https://www.ietf.org/archive/id/draft-irtf-cfrg-aegis-aead-16.html#appendix-A.8.2>
+        fn test_aegismac_128_x2() {
+            let key = Array(hex!("10010000000000000000000000000000"));
+            let iv = Array(hex!("10000200000000000000000000000000"));
+            let data = hex!(
+                "000102030405060708090a0b0c0d0e0f"
+                "101112131415161718191a1b1c1d1e1f"
+                "202122"
+            );
+            let tag128 = Array(hex!("6873ee34e6b5c59143b6d35c5e4f2c6e"));
 
-        test_mac::<U4, U16>(key, iv, &data, tag128);
+            test_mac::<X2, Tag128>(key, iv, &data, tag128);
+        }
+
+        #[test]
+        /// <https://www.ietf.org/archive/id/draft-irtf-cfrg-aegis-aead-16.html#appendix-A.8.3>
+        fn test_aegismac_128_x4() {
+            let key = Array(hex!("10010000000000000000000000000000"));
+            let iv = Array(hex!("10000200000000000000000000000000"));
+            let data = hex!(
+                "000102030405060708090a0b0c0d0e0f"
+                "101112131415161718191a1b1c1d1e1f"
+                "202122"
+            );
+            let tag128 = Array(hex!("c45a98fd9ab8956ce616eb008cfe4e53"));
+
+            test_mac::<X4, Tag128>(key, iv, &data, tag128);
+        }
     }
 }

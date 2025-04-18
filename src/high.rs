@@ -18,34 +18,72 @@ use subtle::ConstantTimeEq;
 
 use crate::mid::AegisCore;
 
-pub struct Aegis<C: AegisCore, T>(Array<u8, C::Key>, PhantomData<T>);
+mod sealed {
+    pub trait Sealed {}
+}
 
-impl<C: AegisCore, T> KeySizeUser for Aegis<C, T> {
+impl sealed::Sealed for crate::Tag128 {}
+impl sealed::Sealed for crate::Tag256 {}
+
+pub trait AegisTag: sealed::Sealed {
+    type Size: ArraySize;
+    #[doc(hidden)]
+    fn finalize<C: AegisCore>(s: C, ad_len_bits: u64, msg_len_bits: u64) -> Array<u8, Self::Size>;
+    #[doc(hidden)]
+    fn finalize_mac<C: AegisCore>(s: C, data_len_bits: u64) -> Array<u8, Self::Size>;
+}
+
+impl AegisTag for crate::Tag128 {
+    type Size = U16;
+
+    #[doc(hidden)]
+    #[inline(always)]
+    fn finalize<C: AegisCore>(s: C, ad_len_bits: u64, msg_len_bits: u64) -> Array<u8, Self::Size> {
+        Array(s.finalize128(ad_len_bits, msg_len_bits))
+    }
+    #[doc(hidden)]
+    #[inline(always)]
+    fn finalize_mac<C: AegisCore>(s: C, data_len_bits: u64) -> Array<u8, Self::Size> {
+        Array(s.finalize_mac128(data_len_bits))
+    }
+}
+
+impl AegisTag for crate::Tag256 {
+    type Size = U32;
+
+    #[doc(hidden)]
+    #[inline(always)]
+    fn finalize<C: AegisCore>(s: C, ad_len_bits: u64, msg_len_bits: u64) -> Array<u8, Self::Size> {
+        Array(s.finalize256(ad_len_bits, msg_len_bits))
+    }
+    #[doc(hidden)]
+    #[inline(always)]
+    fn finalize_mac<C: AegisCore>(s: C, data_len_bits: u64) -> Array<u8, Self::Size> {
+        Array(s.finalize_mac256(data_len_bits))
+    }
+}
+
+pub struct Aegis<C: AegisCore, T: AegisTag>(Array<u8, C::Key>, PhantomData<T>);
+
+impl<C: AegisCore, T: AegisTag> KeySizeUser for Aegis<C, T> {
     type KeySize = C::Key;
 }
 
-impl<C: AegisCore, T> KeyInit for Aegis<C, T> {
+impl<C: AegisCore, T: AegisTag> KeyInit for Aegis<C, T> {
     #[inline(always)]
     fn new(key: &Key<Self>) -> Self {
         Self(key.clone(), PhantomData)
     }
 }
 
-impl<C: AegisCore> AeadCore for Aegis<C, U16> {
+impl<C: AegisCore, T: AegisTag> AeadCore for Aegis<C, T> {
     type NonceSize = C::Key;
-    type TagSize = U16;
+    type TagSize = T::Size;
 
     const TAG_POSITION: aead::TagPosition = aead::TagPosition::Postfix;
 }
 
-impl<C: AegisCore> AeadCore for Aegis<C, U32> {
-    type NonceSize = C::Key;
-    type TagSize = U32;
-
-    const TAG_POSITION: aead::TagPosition = aead::TagPosition::Postfix;
-}
-
-impl<C: AegisCore> AeadInOut for Aegis<C, U16> {
+impl<C: AegisCore, T: AegisTag> AeadInOut for Aegis<C, T> {
     fn encrypt_inout_detached(
         &self,
         nonce: &Nonce<Self>,
@@ -60,13 +98,33 @@ impl<C: AegisCore> AeadInOut for Aegis<C, U16> {
         // Init(key, nonce)
         let mut state = C::new(&self.0, nonce);
 
-        core_encrypt_inout_detached(&mut state, associated_data, buffer);
+        // ad_blocks = Split(ZeroPad(ad, R), R)
+        // for ai in ad_blocks:
+        //     Absorb(ai)
+        process_chunks_padded(associated_data, |ad_chunk| {
+            state.absorb(ad_chunk);
+        });
+
+        // msg_blocks = Split(ZeroPad(msg, R), R)
+        // for xi in msg_blocks:
+        //     ct = ct || Enc(xi)
+        let (xt_blocks, mut xn) = buffer.into_chunks();
+        for xi in xt_blocks {
+            state.encrypt_block(xi);
+        }
+        if !xn.is_empty() {
+            let len = xn.len();
+            let mut msg_chunk = Array::default();
+            msg_chunk[..len].copy_from_slice(xn.get_in());
+            state.encrypt_block(InOut::from(&mut msg_chunk));
+            xn.get_out().copy_from_slice(&msg_chunk[..len]);
+        }
 
         // tag = Finalize(|ad|, |msg|)
         // ct = Truncate(ct, |msg|)
 
         // return ct and tag
-        Ok(state.finalize128(ad_len_bits, msg_len_bits))
+        Ok(T::finalize(state, ad_len_bits, msg_len_bits))
     }
 
     fn decrypt_inout_detached(
@@ -84,7 +142,28 @@ impl<C: AegisCore> AeadInOut for Aegis<C, U16> {
         // Init(key, nonce)
         let mut state = C::new(&self.0, nonce);
 
-        core_decrypt_inout_detached(&mut state, associated_data, buffer.reborrow());
+        // ad_blocks = Split(ZeroPad(ad, R), R)
+        // for ai in ad_blocks:
+        //     Absorb(ai)
+        process_chunks_padded(associated_data, |ad_chunk| {
+            state.absorb(ad_chunk);
+        });
+
+        // ct_blocks = Split(ct, R)
+        // cn = Tail(ct, |ct| mod R)
+        let (ct_blocks, cn) = buffer.reborrow().into_chunks();
+
+        // for ci in ct_blocks:
+        //     msg = msg || Dec(ci)
+        for ci in ct_blocks {
+            state.decrypt_block(ci);
+        }
+
+        // if cn is not empty:
+        //     msg = msg || DecPartial(cn)
+        if !cn.is_empty() {
+            decrypt_partial(&mut state, cn);
+        }
 
         // expected_tag = Finalize(|ad|, |msg|)
         let expected_tag = state.finalize128(ad_len_bits, msg_len_bits);
@@ -107,140 +186,12 @@ impl<C: AegisCore> AeadInOut for Aegis<C, U16> {
     }
 }
 
-impl<C: AegisCore> AeadInOut for Aegis<C, U32> {
-    fn encrypt_inout_detached(
-        &self,
-        nonce: &Nonce<Self>,
-        associated_data: &[u8],
-        buffer: InOutBuf<'_, '_, u8>,
-    ) -> aead::Result<aead::Tag<Self>> {
-        // P_MAX (maximum length of the plaintext) is 2^61 - 1 bytes (2^64 - 8 bits).
-        // A_MAX (maximum length of the associated data) is 2^61 - 1 bytes (2^64 - 8 bits).
-        let msg_len_bits = bits(buffer.len())?;
-        let ad_len_bits = bits(associated_data.len())?;
-
-        // Init(key, nonce)
-        let mut state = C::new(&self.0, nonce);
-
-        core_encrypt_inout_detached(&mut state, associated_data, buffer);
-
-        // tag = Finalize(|ad|, |msg|)
-        // ct = Truncate(ct, |msg|)
-
-        // return ct and tag
-        Ok(state.finalize256(ad_len_bits, msg_len_bits))
-    }
-
-    fn decrypt_inout_detached(
-        &self,
-        nonce: &Nonce<Self>,
-        associated_data: &[u8],
-        mut buffer: InOutBuf<'_, '_, u8>,
-        tag: &aead::Tag<Self>,
-    ) -> aead::Result<()> {
-        // P_MAX (maximum length of the plaintext) is 2^61 - 1 bytes (2^64 - 8 bits).
-        // A_MAX (maximum length of the associated data) is 2^61 - 1 bytes (2^64 - 8 bits).
-        let msg_len_bits = bits(buffer.len())?;
-        let ad_len_bits = bits(associated_data.len())?;
-
-        // Init(key, nonce)
-        let mut state = C::new(&self.0, nonce);
-
-        core_decrypt_inout_detached(&mut state, associated_data, buffer.reborrow());
-
-        // expected_tag = Finalize(|ad|, |msg|)
-        let expected_tag = state.finalize256(ad_len_bits, msg_len_bits);
-
-        // if CtEq(tag, expected_tag) is False:
-        //     erase msg
-        //     erase expected_tag
-        //     return "verification failed" error
-        // else:
-        //     return msg
-
-        if expected_tag.ct_ne(tag).into() {
-            // re-encrypt the buffer to prevent revealing the plaintext.
-            self.encrypt_inout_detached(nonce, associated_data, InOutBuf::from(buffer.get_out()))
-                .unwrap();
-            Err(aead::Error)
-        } else {
-            Ok(())
-        }
-    }
-}
-
-fn core_encrypt_inout_detached<C: AegisCore>(
-    state: &mut C,
-    associated_data: &[u8],
-    buffer: InOutBuf<'_, '_, u8>,
-) {
-    // ad_blocks = Split(ZeroPad(ad, R), R)
-    // for ai in ad_blocks:
-    //     Absorb(ai)
-    process_chunks_padded(associated_data, |ad_chunk| {
-        state.absorb(ad_chunk);
-    });
-
-    // msg_blocks = Split(ZeroPad(msg, R), R)
-    // for xi in msg_blocks:
-    //     ct = ct || Enc(xi)
-    process_inout_chunks_padded(buffer, |msg_chunk| {
-        state.encrypt_block(msg_chunk);
-    });
-}
-
-fn core_decrypt_inout_detached<C: AegisCore>(
-    state: &mut C,
-    associated_data: &[u8],
-    mut buffer: InOutBuf<'_, '_, u8>,
-) {
-    // ad_blocks = Split(ZeroPad(ad, R), R)
-    // for ai in ad_blocks:
-    //     Absorb(ai)
-    process_chunks_padded(associated_data, |ad_chunk| {
-        state.absorb(ad_chunk);
-    });
-
-    // ct_blocks = Split(ct, R)
-    // cn = Tail(ct, |ct| mod R)
-    let (ct_blocks, cn) = buffer.reborrow().into_chunks();
-
-    // for ci in ct_blocks:
-    //     msg = msg || Dec(ci)
-    for ci in ct_blocks {
-        state.decrypt_block(ci);
-    }
-
-    // if cn is not empty:
-    //     msg = msg || DecPartial(cn)
-    if !cn.is_empty() {
-        decrypt_partial(state, cn);
-    }
-}
-
 fn decrypt_partial<C: AegisCore>(state: &mut C, mut tail: InOutBuf<'_, '_, u8>) {
     let len = tail.len();
     let mut msg_chunk = Array::default();
     msg_chunk[..len].copy_from_slice(tail.get_in());
     state.decrypt_partial_block(InOut::from(&mut msg_chunk), len);
     tail.get_out().copy_from_slice(&msg_chunk[..len]);
-}
-
-fn process_inout_chunks_padded<'in_, 'out, T: ArraySize>(
-    buffer: InOutBuf<'in_, 'out, u8>,
-    mut f: impl for<'in2, 'out2> FnMut(InOut<'in2, 'out2, Array<u8, T>>),
-) {
-    let (msg_chunks, mut msg_tail) = buffer.into_chunks();
-    for msg_chunk in msg_chunks {
-        f(msg_chunk);
-    }
-    if !msg_tail.is_empty() {
-        let len = msg_tail.len();
-        let mut msg_chunk = Array::default();
-        msg_chunk[..len].copy_from_slice(msg_tail.get_in());
-        f(InOut::from(&mut msg_chunk));
-        msg_tail.get_out().copy_from_slice(&msg_chunk[..len]);
-    }
 }
 
 fn process_chunks_padded<T: ArraySize>(data: &[u8], mut f: impl FnMut(&Array<u8, T>)) {
@@ -264,22 +215,22 @@ fn bits(bytes: usize) -> aead::Result<u64> {
 }
 
 #[derive(Clone)]
-pub struct AegisMac<C: AegisCore, T> {
+pub struct AegisMac<C: AegisCore, T: AegisTag> {
     state: C,
     blocks: BlockBuffer<C::Block, Eager>,
     data_len_bits: u64,
     _parallel: PhantomData<T>,
 }
 
-impl<C: AegisCore, T> KeySizeUser for AegisMac<C, T> {
+impl<C: AegisCore, T: AegisTag> KeySizeUser for AegisMac<C, T> {
     type KeySize = C::Key;
 }
 
-impl<C: AegisCore, T> IvSizeUser for AegisMac<C, T> {
+impl<C: AegisCore, T: AegisTag> IvSizeUser for AegisMac<C, T> {
     type IvSize = C::Key;
 }
 
-impl<C: AegisCore, T> KeyIvInit for AegisMac<C, T> {
+impl<C: AegisCore, T: AegisTag> KeyIvInit for AegisMac<C, T> {
     fn new(key: &Key<Self>, iv: &Iv<Self>) -> Self {
         Self {
             state: C::new(key, iv),
@@ -291,8 +242,8 @@ impl<C: AegisCore, T> KeyIvInit for AegisMac<C, T> {
 }
 
 // Update + FixedOutput + MacMarker
-impl<C: AegisCore, T> MacMarker for AegisMac<C, T> {}
-impl<C: AegisCore, T> Update for AegisMac<C, T> {
+impl<C: AegisCore, T: AegisTag> MacMarker for AegisMac<C, T> {}
+impl<C: AegisCore, T: AegisTag> Update for AegisMac<C, T> {
     fn update(&mut self, data: &[u8]) {
         self.data_len_bits = bits(data.len())
             .ok()
@@ -305,24 +256,13 @@ impl<C: AegisCore, T> Update for AegisMac<C, T> {
     }
 }
 
-impl<C: AegisCore> OutputSizeUser for AegisMac<C, U16> {
-    type OutputSize = U16;
+impl<C: AegisCore, T: AegisTag> OutputSizeUser for AegisMac<C, T> {
+    type OutputSize = T::Size;
 }
 
-impl<C: AegisCore> OutputSizeUser for AegisMac<C, U32> {
-    type OutputSize = U32;
-}
-
-impl<C: AegisCore> FixedOutput for AegisMac<C, U16> {
+impl<C: AegisCore, T: AegisTag> FixedOutput for AegisMac<C, T> {
     fn finalize_into(mut self, out: &mut digest::Output<Self>) {
         self.state.absorb(&self.blocks.pad_with_zeros());
-        *out = self.state.finalize_mac128(self.data_len_bits)
-    }
-}
-
-impl<C: AegisCore> FixedOutput for AegisMac<C, U32> {
-    fn finalize_into(mut self, out: &mut digest::Output<Self>) {
-        self.state.absorb(&self.blocks.pad_with_zeros());
-        *out = self.state.finalize_mac256(self.data_len_bits)
+        *out = T::finalize_mac(self.state, self.data_len_bits)
     }
 }

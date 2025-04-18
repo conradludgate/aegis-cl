@@ -92,9 +92,9 @@ mod aegis_cl {
 
     use aegis_cl::{
         AegisMac128L, AegisMac128X2, AegisMac128X4, AegisMac256, AegisMac256X2, AegisMac256X4,
+        Tag128,
     };
     use digest::{Mac, crypto_common::KeyIvInit};
-    use hybrid_array::sizes::U16;
 
     #[divan::bench]
     fn aegis128l(b: Bencher) {
@@ -102,7 +102,7 @@ mod aegis_cl {
         let key = [0u8; 16];
 
         b.counter(BytesCount::of_slice(&m)).bench_local(|| {
-            let mut state = AegisMac128L::<U16>::new(&black_box(key).into(), &[0u8; 16].into());
+            let mut state = AegisMac128L::<Tag128>::new(&black_box(key).into(), &[0u8; 16].into());
             state.update(black_box(&m));
             black_box(state.finalize());
         });
@@ -113,7 +113,7 @@ mod aegis_cl {
         let key = [0u8; 16];
 
         b.counter(BytesCount::of_slice(&m)).bench_local(|| {
-            let mut state = AegisMac128X2::<U16>::new(&black_box(key).into(), &[0u8; 16].into());
+            let mut state = AegisMac128X2::<Tag128>::new(&black_box(key).into(), &[0u8; 16].into());
             state.update(black_box(&m));
             state.finalize()
         });
@@ -124,7 +124,7 @@ mod aegis_cl {
         let key = [0u8; 16];
 
         b.counter(BytesCount::of_slice(&m)).bench_local(|| {
-            let mut state = AegisMac128X4::<U16>::new(&black_box(key).into(), &[0u8; 16].into());
+            let mut state = AegisMac128X4::<Tag128>::new(&black_box(key).into(), &[0u8; 16].into());
             state.update(black_box(&m));
             state.finalize()
         });
@@ -135,7 +135,7 @@ mod aegis_cl {
         let key = [0u8; 32];
 
         b.counter(BytesCount::of_slice(&m)).bench_local(|| {
-            let mut state = AegisMac256::<U16>::new(&black_box(key).into(), &[0u8; 32].into());
+            let mut state = AegisMac256::<Tag128>::new(&black_box(key).into(), &[0u8; 32].into());
             state.update(black_box(&m));
             state.finalize()
         });
@@ -146,7 +146,7 @@ mod aegis_cl {
         let key = [0u8; 32];
 
         b.counter(BytesCount::of_slice(&m)).bench_local(|| {
-            let mut state = AegisMac256X2::<U16>::new(&black_box(key).into(), &[0u8; 32].into());
+            let mut state = AegisMac256X2::<Tag128>::new(&black_box(key).into(), &[0u8; 32].into());
             state.update(black_box(&m));
             state.finalize()
         });
@@ -157,7 +157,7 @@ mod aegis_cl {
         let key = [0u8; 32];
 
         b.counter(BytesCount::of_slice(&m)).bench_local(|| {
-            let mut state = AegisMac256X4::<U16>::new(&black_box(key).into(), &[0u8; 32].into());
+            let mut state = AegisMac256X4::<Tag128>::new(&black_box(key).into(), &[0u8; 32].into());
             state.update(black_box(&m));
             state.finalize()
         });

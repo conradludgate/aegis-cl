@@ -1,11 +1,9 @@
 use std::arch::x86_64::*;
 use std::ops::{BitAnd, BitXor};
-use std::simd::{u8x16, u8x32};
 
 use hybrid_array::Array;
-use hybrid_array::sizes::{U2, U16, U32, U64};
+use hybrid_array::sizes::{U2, U32, U64};
 
-use crate::AegisParallel;
 use crate::low::IAesBlock;
 
 use super::AesBlock;
@@ -13,13 +11,6 @@ use super::AesBlock;
 #[derive(Clone, Copy)]
 #[repr(transparent)]
 pub struct AesBlock2(pub(super) __m256i);
-
-impl AegisParallel for U2 {
-    type Block2 = U64;
-    type Block = U32;
-
-    type AesBlock = AesBlock2;
-}
 
 impl From<AesBlock> for AesBlock2 {
     #[inline(always)]
@@ -29,10 +20,10 @@ impl From<AesBlock> for AesBlock2 {
     }
 }
 
-impl From<Array<AesBlock, U2>> for AesBlock2 {
+impl From<[AesBlock; 2]> for AesBlock2 {
     #[inline(always)]
-    fn from(value: Array<AesBlock, U2>) -> Self {
-        let Array([a, b]) = value;
+    fn from(value: [AesBlock; 2]) -> Self {
+        let [a, b] = value;
         // Safety: we require target_feature = "avx2".
         // I think avx2 implies avx???
         unsafe { Self(_mm256_setr_m128i(a.0, b.0)) }
@@ -59,7 +50,8 @@ impl From<AesBlock2> for Array<u8, U32> {
 }
 
 impl IAesBlock for AesBlock2 {
-    type Size = U32;
+    type Block = U32;
+    type Block2 = U64;
 
     #[inline(always)]
     fn aes(self, key: Self) -> Self {
@@ -83,7 +75,7 @@ impl IAesBlock for AesBlock2 {
     }
 
     #[inline(always)]
-    fn from_block(a: &Array<u8, Self::Size>) -> Self {
+    fn from_block(a: &Array<u8, Self::Block>) -> Self {
         // Safety: both types are equivalent, and transmute does not care about alignment.
         Self(unsafe { core::mem::transmute::<[u8; 32], __m256i>(a.0) })
     }

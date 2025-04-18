@@ -1,37 +1,31 @@
 use hybrid_array::{Array, ArraySize};
 use std::ops::{Add, BitAnd, BitXor, Sub};
 
-pub trait AegisParallel: hybrid_array::ArraySize {
-    type Block2: hybrid_array::ArraySize + Sub<Self::Block, Output = Self::Block>;
-    type Block: hybrid_array::ArraySize + Add<Self::Block, Output = Self::Block2>;
-
-    #[doc(hidden)]
-    type AesBlock: IAesBlock<Size = Self::Block>
-        + From<Array<AesBlock, Self>>
-        + Into<Array<AesBlock, Self>>;
-}
-
 pub trait IAesBlock:
-    Copy + From<AesBlock> + BitXor<Output = Self> + BitAnd<Output = Self> + Into<Array<u8, Self::Size>>
+    Copy + From<AesBlock> + BitXor<Output = Self> + BitAnd<Output = Self> + Into<Array<u8, Self::Block>>
 {
-    type Size: ArraySize;
+    type Block: ArraySize + Add<Self::Block, Output = Self::Block2>;
+    type Block2: ArraySize + Sub<Self::Block, Output = Self::Block>;
+
     fn aes(self, key: Self) -> Self;
     fn reduce_xor(self) -> AesBlock;
     fn first(&self) -> AesBlock;
 
-    fn from_block(a: &Array<u8, Self::Size>) -> Self;
+    fn from_block(a: &Array<u8, Self::Block>) -> Self;
 }
 
 cfg_if::cfg_if! {
     if #[cfg(all(target_arch = "aarch64", target_feature = "aes"))] {
+        #[allow(unsafe_code)]
         mod aarch64;
-        pub use aarch64::AesBlock;
+        pub use aarch64::{AesBlock, AesBlock2, AesBlock4};
     } else if #[cfg(all(target_arch = "x86_64", target_feature = "aes"))] {
+        #[allow(unsafe_code)]
         mod x86_64;
-        pub use x86_64::AesBlock;
+        pub use x86_64::{AesBlock, AesBlock2, AesBlock4};
     } else {
         mod generic;
-        pub use generic::AesBlock;
+        pub use generic::{AesBlock, AesBlock2, AesBlock4};
     }
 }
 
