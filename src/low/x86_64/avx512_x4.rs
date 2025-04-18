@@ -1,16 +1,19 @@
+#![cfg(all(target_feature = "avx512f", target_feature = "vaes"))]
+
 use std::arch::x86_64::*;
 use std::ops::{BitAnd, BitXor};
 
 use hybrid_array::Array;
-use hybrid_array::sizes::{U4, U64, U128};
+use hybrid_array::sizes::{U2, U4, U64, U128};
 
 use crate::AegisParallel;
 use crate::low::IAesBlock;
 
 use super::AesBlock;
+use super::avx2_x2::AesBlock2;
 
 #[derive(Clone, Copy)]
-#[repr(C)]
+#[repr(transparent)]
 pub struct AesBlock4(__m512i);
 
 impl AegisParallel for U4 {
@@ -18,13 +21,6 @@ impl AegisParallel for U4 {
     type Block = U64;
 
     type AesBlock = AesBlock4;
-}
-
-impl Default for AesBlock4 {
-    #[inline(always)]
-    fn default() -> Self {
-        Self(unsafe { _mm512_setzero_si512() })
-    }
 }
 
 impl From<AesBlock> for AesBlock4 {
@@ -39,37 +35,36 @@ impl From<Array<AesBlock, U4>> for AesBlock4 {
     fn from(value: Array<AesBlock, U4>) -> Self {
         let Array([a, b, c, d]) = value;
 
-        unsafe {
-            let a = _mm512_zextsi128_si512(a.0);
-            let ab = _mm512_inserti64x2::<1>(a, b.0);
-            let abc = _mm512_inserti64x2::<2>(ab, c.0);
-            let abcd = _mm512_inserti64x2::<3>(abc, d.0);
-            AesBlock4(abcd)
-        }
+        let ab = AesBlock2::from(Array([a, b]));
+        let cd = AesBlock2::from(Array([c, d]));
+
+        // Safety: we require target_feature = "avx512f".
+        let r = unsafe { _mm512_castsi256_si512(ab.0) };
+        // Safety: we require target_feature = "avx512f".
+        let r = unsafe { _mm512_inserti64x4::<1>(r, cd.0) };
+        Self(r)
     }
 }
 
 impl From<AesBlock4> for Array<AesBlock, U4> {
-    #[inline(always)]
+    #[inline(never)]
     fn from(val: AesBlock4) -> Self {
-        unsafe {
-            let ab = _mm512_extracti64x4_epi64::<0>(val.0);
-            let cd = _mm512_extracti64x4_epi64::<1>(val.0);
-            let a = AesBlock(_mm256_extracti128_si256::<0>(ab));
-            let b = AesBlock(_mm256_extracti128_si256::<1>(ab));
-            let c = AesBlock(_mm256_extracti128_si256::<0>(cd));
-            let d = AesBlock(_mm256_extracti128_si256::<1>(cd));
-            Array([a, b, c, d])
-        }
+        // Safety: we require target_feature = "avx512f".
+        let ab = AesBlock2(unsafe { _mm512_extracti64x4_epi64::<0>(val.0) });
+        // Safety: we require target_feature = "avx512f".
+        let cd = AesBlock2(unsafe { _mm512_extracti64x4_epi64::<1>(val.0) });
+
+        let Array([a, b]): Array<AesBlock, U2> = ab.into();
+        let Array([c, d]): Array<AesBlock, U2> = cd.into();
+        Array([a, b, c, d])
     }
 }
 
 impl From<AesBlock4> for Array<u8, U64> {
     #[inline(always)]
     fn from(val: AesBlock4) -> Self {
-        let mut out = Array::<u8, U64>::default();
-        unsafe { _mm512_storeu_epi8(out.as_mut_ptr().cast(), val.0) }
-        out
+        // Safety: both types are equivalent, and transmute does not care about alignment.
+        Array(unsafe { core::mem::transmute::<__m512i, [u8; 64]>(val.0) })
     }
 }
 
@@ -78,32 +73,31 @@ impl IAesBlock for AesBlock4 {
 
     #[inline(always)]
     fn aes(self, key: Self) -> Self {
+        // Safety: we require target_feature = "vaes" and target_feature = "aes512f".
         Self(unsafe { _mm512_aesenc_epi128(self.0, key.0) })
     }
 
     #[inline(always)]
     fn first(&self) -> AesBlock {
-        unsafe { AesBlock(_mm512_extracti64x2_epi64::<0>(self.0)) }
+        // Safety: we require target_feature = "avx512f".
+        let ab = AesBlock2(unsafe { _mm512_extracti64x4_epi64::<0>(self.0) });
+        ab.first()
     }
 
     #[inline(always)]
     fn reduce_xor(self) -> AesBlock {
-        unsafe {
-            let a = _mm256_xor_si256(
-                _mm512_extracti64x4_epi64::<0>(self.0),
-                _mm512_extracti64x4_epi64::<1>(self.0),
-            );
-            let a = _mm_xor_si128(
-                _mm256_extracti128_si256::<0>(a),
-                _mm256_extracti128_si256::<1>(a),
-            );
-            AesBlock(a)
-        }
+        // Safety: we require target_feature = "avx512f".
+        let ab = AesBlock2(unsafe { _mm512_extracti64x4_epi64::<0>(self.0) });
+        // Safety: we require target_feature = "avx512f".
+        let cd = AesBlock2(unsafe { _mm512_extracti64x4_epi64::<1>(self.0) });
+
+        (ab ^ cd).reduce_xor()
     }
 
     #[inline(always)]
     fn from_block(a: &Array<u8, Self::Size>) -> Self {
-        AesBlock4(unsafe { _mm512_loadu_epi8(a.as_ptr().cast()) })
+        // Safety: both types are equivalent, and transmute does not care about alignment.
+        Self(unsafe { core::mem::transmute::<[u8; 64], __m512i>(a.0) })
     }
 }
 
@@ -112,6 +106,7 @@ impl BitXor for AesBlock4 {
 
     #[inline(always)]
     fn bitxor(self, rhs: Self) -> Self::Output {
+        // Safety: we require target_feature = "aes512f".
         Self(unsafe { _mm512_xor_si512(self.0, rhs.0) })
     }
 }
@@ -121,6 +116,7 @@ impl BitAnd for AesBlock4 {
 
     #[inline(always)]
     fn bitand(self, rhs: Self) -> Self::Output {
+        // Safety: we require target_feature = "aes512f".
         Self(unsafe { _mm512_and_si512(self.0, rhs.0) })
     }
 }

@@ -8,7 +8,7 @@ use crate::AegisParallel;
 use crate::low::IAesBlock;
 
 #[derive(Clone, Copy)]
-#[repr(C)]
+#[repr(transparent)]
 pub struct AesBlock(pub(super) __m128i);
 
 impl AegisParallel for U1 {
@@ -16,13 +16,6 @@ impl AegisParallel for U1 {
     type Block = U16;
 
     type AesBlock = AesBlock;
-}
-
-impl Default for AesBlock {
-    #[inline(always)]
-    fn default() -> Self {
-        Self(unsafe { _mm_setzero_si128() })
-    }
 }
 
 impl From<Array<AesBlock, U1>> for AesBlock {
@@ -43,9 +36,8 @@ impl From<AesBlock> for Array<AesBlock, U1> {
 impl From<AesBlock> for Array<u8, U16> {
     #[inline(always)]
     fn from(val: AesBlock) -> Self {
-        let mut out = Array::<u8, U16>::default();
-        unsafe { _mm_storeu_epi8(out.as_mut_ptr().cast(), val.0) }
-        out
+        // Safety: both types are equivalent, and transmute does not care about alignment.
+        Array(unsafe { core::mem::transmute::<__m128i, [u8; 16]>(val.0) })
     }
 }
 
@@ -54,6 +46,7 @@ impl IAesBlock for AesBlock {
 
     #[inline(always)]
     fn aes(self, key: Self) -> Self {
+        // Safety: we require target_feature = "aes".
         Self(unsafe { _mm_aesenc_si128(self.0, key.0) })
     }
 
@@ -69,7 +62,8 @@ impl IAesBlock for AesBlock {
 
     #[inline(always)]
     fn from_block(a: &Array<u8, Self::Size>) -> Self {
-        AesBlock(unsafe { _mm_loadu_epi8(a.as_ptr().cast()) })
+        // Safety: both types are equivalent, and transmute does not care about alignment.
+        AesBlock(unsafe { core::mem::transmute::<[u8; 16], __m128i>(a.0) })
     }
 }
 
@@ -78,6 +72,8 @@ impl BitXor for AesBlock {
 
     #[inline(always)]
     fn bitxor(self, rhs: Self) -> Self::Output {
+        // Safety: we require target_feature = "aes".
+        // I think aes implies sse2???
         Self(unsafe { _mm_xor_si128(self.0, rhs.0) })
     }
 }
@@ -87,6 +83,8 @@ impl BitAnd for AesBlock {
 
     #[inline(always)]
     fn bitand(self, rhs: Self) -> Self::Output {
+        // Safety: we require target_feature = "aes".
+        // I think aes implies sse2???
         Self(unsafe { _mm_and_si128(self.0, rhs.0) })
     }
 }

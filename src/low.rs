@@ -12,12 +12,7 @@ pub trait AegisParallel: hybrid_array::ArraySize {
 }
 
 pub trait IAesBlock:
-    Default
-    + Copy
-    + From<AesBlock>
-    + BitXor<Output = Self>
-    + BitAnd<Output = Self>
-    + Into<Array<u8, Self::Size>>
+    Copy + From<AesBlock> + BitXor<Output = Self> + BitAnd<Output = Self> + Into<Array<u8, Self::Size>>
 {
     type Size: ArraySize;
     fn aes(self, key: Self) -> Self;

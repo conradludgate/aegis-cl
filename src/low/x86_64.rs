@@ -5,7 +5,7 @@ mod avx_l;
 pub use avx_l::AesBlock;
 
 cfg_if::cfg_if! {
-    if #[cfg(target_feature="avx2")] {
+    if #[cfg(all(target_feature="avx2",target_feature="vaes"))] {
         mod avx2_x2;
         use avx2_x2::AesBlock2;
     } else {
@@ -17,7 +17,7 @@ cfg_if::cfg_if! {
 }
 
 cfg_if::cfg_if! {
-    if #[cfg(target_feature="avx512f")] {
+    if #[cfg(all(target_feature="avx512f",target_feature="vaes"))] {
         mod avx512_x4;
         use avx512_x4::AesBlock4;
     } else {

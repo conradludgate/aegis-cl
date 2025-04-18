@@ -1,5 +1,6 @@
 #![doc = include_str!("../README.md")]
-#![cfg_attr(all(target_arch = "x86_64", target_feature = "avx512f"), feature(stdarch_x86_avx512))]
+#![cfg_attr(all(target_arch = "x86_64"), feature(stdarch_x86_avx512))]
+#![feature(portable_simd)]
 
 pub use aead;
 pub use hybrid_array;

@@ -16,13 +16,6 @@ impl AegisParallel for U1 {
 #[derive(Clone, Copy)]
 pub struct AesBlock(aes::Block);
 
-impl Default for AesBlock {
-    #[inline(always)]
-    fn default() -> Self {
-        Self(aes::Block::default())
-    }
-}
-
 impl From<Array<AesBlock, U1>> for AesBlock {
     #[inline(always)]
     fn from(value: Array<AesBlock, U1>) -> Self {

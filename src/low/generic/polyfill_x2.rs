@@ -19,13 +19,6 @@ impl AegisParallel for U2 {
     type AesBlock = AesBlock2;
 }
 
-impl Default for AesBlock2 {
-    #[inline(always)]
-    fn default() -> Self {
-        Self(AesBlock::default(), AesBlock::default())
-    }
-}
-
 impl From<AesBlock> for AesBlock2 {
     #[inline(always)]
     fn from(a: AesBlock) -> Self {
