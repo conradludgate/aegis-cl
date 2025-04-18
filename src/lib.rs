@@ -8,42 +8,97 @@ pub use cipher;
 pub use digest;
 pub use hybrid_array;
 
+/// 1x [parallism](`mid::AegisParallel`) marker for AEGIS.
 pub struct X1;
+/// 2x [parallism](`mid::AegisParallel`) marker for AEGIS.
 pub struct X2;
+/// 4x [parallism](`mid::AegisParallel`) marker for AEGIS.
 pub struct X4;
 
+/// 128-bit [tag](`high::AegisTag`) marker for AEGIS.
 pub struct Tag128;
+/// 256-bit [tag](`high::AegisTag`) marker for AEGIS.
 pub struct Tag256;
 
-// *  C0: an AES block built from the following bytes in hexadecimal
-// format: { 0x00, 0x01, 0x01, 0x02, 0x03, 0x05, 0x08, 0x0d, 0x15,
-// 0x22, 0x37, 0x59, 0x90, 0xe9, 0x79, 0x62 }.
-const C0: Array<u8, hybrid_array::sizes::U16> = Array([
-    0x00, 0x01, 0x01, 0x02, 0x03, 0x05, 0x08, 0x0d, 0x15, 0x22, 0x37, 0x59, 0x90, 0xe9, 0x79, 0x62,
-]);
-
-// *  C1: an AES block built from the following bytes in hexadecimal
-// format: { 0xdb, 0x3d, 0x18, 0x55, 0x6d, 0xc2, 0x2f, 0xf1, 0x20,
-// 0x11, 0x31, 0x42, 0x73, 0xb5, 0x28, 0xdd }.
-const C1: Array<u8, hybrid_array::sizes::U16> = Array([
-    0xdb, 0x3d, 0x18, 0x55, 0x6d, 0xc2, 0x2f, 0xf1, 0x20, 0x11, 0x31, 0x42, 0x73, 0xb5, 0x28, 0xdd,
-]);
-
-use hybrid_array::Array;
-
+/// high level internals
 pub mod high;
+/// middle level internals, including the core AEGIS functions
 pub mod low;
+/// low level internals, including AES hardware optimisations.
 pub mod mid;
 
-pub use mid::AegisCore;
-pub use mid::AegisParallel;
+/// AEGIS-128L Authenticated Encryption
+///
+/// This is an [AEAD](`aead`) with 16 byte keys and 16 byte IVs.
+pub type Aegis128L<T> = high::Aegis128X<X1, T>;
+/// AEGIS-128X2 Authenticated Encryption
+///
+/// This is an [AEAD](`aead`) with 16 byte keys and 16 byte IVs.
+///
+/// It's much like [`Aegis128L`] but operates on 2 blocks in parallel,
+/// which can be faster when running on AVX2 with VAES.
+pub type Aegis128X2<T> = high::Aegis128X<X2, T>;
+/// AEGIS-128X4 Authenticated Encryption
+///
+/// This is an [AEAD](`aead`) with 16 byte keys and 16 byte IVs.
+///
+/// It's much like [`Aegis128L`] but operates on 4 blocks in parallel,
+/// which can be faster when running on AVX-512.
+pub type Aegis128X4<T> = high::Aegis128X<X4, T>;
 
-pub use high::aegis128::{
-    Aegis128L, Aegis128X, Aegis128X2, Aegis128X4, AegisMac128L, AegisMac128X, AegisMac128X2,
-    AegisMac128X4,
-};
+/// AEGISMAC-128L - Message Authentication
+///
+/// This is an [MAC](`digest::mac`) with 16 byte keys and 16 byte IVs.
+pub type AegisMac128L<T> = high::AegisMac128X<X1, T>;
+/// AEGISMAC-128L - Message Authentication
+///
+/// This is an [MAC](`digest::mac`) with 16 byte keys and 16 byte IVs.
+///
+/// It's much like [`AegisMac128L`] but operates on 2 blocks in parallel,
+/// which can be faster when running on AVX2 with VAES.
+pub type AegisMac128X2<T> = high::AegisMac128X<X2, T>;
+/// AEGISMAC-128L - Message Authentication
+///
+/// This is an [MAC](`digest::mac`) with 16 byte keys and 16 byte IVs.
+///
+/// It's much like [`AegisMac128L`] but operates on 4 blocks in parallel,
+/// which can be faster when running on AVX-512.
+pub type AegisMac128X4<T> = high::AegisMac128X<X4, T>;
 
-pub use high::aegis256::{
-    Aegis256, Aegis256X, Aegis256X2, Aegis256X4, AegisMac256, AegisMac256X, AegisMac256X2,
-    AegisMac256X4,
-};
+/// AEGIS-256 Authenticated Encryption
+///
+/// This is an [AEAD](`aead`) with 32 byte keys and 32 byte IVs.
+pub type Aegis256<T> = high::Aegis256X<X1, T>;
+/// AEGIS-256X2 Authenticated Encryption
+///
+/// This is an [AEAD](`aead`) with 32 byte keys and 32 byte IVs.
+///
+/// It's much like [`Aegis256`] but operates on 2 blocks in parallel,
+/// which can be faster when running on AVX2 with VAES.
+pub type Aegis256X2<T> = high::Aegis256X<X2, T>;
+/// AEGIS-256X4 Authenticated Encryption
+///
+/// This is an [AEAD](`aead`) with 32 byte keys and 32 byte IVs.
+///
+/// It's much like [`Aegis256`] but operates on 4 blocks in parallel,
+/// which can be faster when running on AVX-512.
+pub type Aegis256X4<T> = high::Aegis256X<X4, T>;
+
+/// AEGISMAC-256 - Message Authentication
+///
+/// This is an [MAC](`digest::mac`) with 32 byte keys and 32 byte IVs.
+pub type AegisMac256<T> = high::AegisMac256X<X1, T>;
+/// AEGISMAC-128L - Message Authentication
+///
+/// This is an [MAC](`digest::mac`) with 32 byte keys and 32 byte IVs.
+///
+/// It's much like [`AegisMac256`] but operates on 2 blocks in parallel,
+/// which can be faster when running on AVX2 with VAES.
+pub type AegisMac256X2<T> = high::AegisMac256X<X2, T>;
+/// AEGISMAC-128L - Message Authentication
+///
+/// This is an [MAC](`digest::mac`) with 32 byte keys and 32 byte IVs.
+///
+/// It's much like [`AegisMac256`] but operates on 4 blocks in parallel,
+/// which can be faster when running on AVX-512.
+pub type AegisMac256X4<T> = high::AegisMac256X<X4, T>;

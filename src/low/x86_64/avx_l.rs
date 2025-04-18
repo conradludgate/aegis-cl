@@ -4,7 +4,7 @@ use std::ops::{BitAnd, BitXor};
 use hybrid_array::Array;
 use hybrid_array::sizes::{U1, U16, U32};
 
-use crate::low::IAesBlock;
+use crate::low::AesBlockArray;
 
 #[derive(Clone, Copy)]
 #[repr(transparent)]
@@ -40,7 +40,7 @@ impl From<AesBlock> for [u8; 16] {
     }
 }
 
-impl IAesBlock for AesBlock {
+impl AesBlockArray for AesBlock {
     type Block = U16;
     type Block2 = U32;
 

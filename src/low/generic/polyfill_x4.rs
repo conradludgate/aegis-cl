@@ -3,7 +3,7 @@ use std::ops::{BitAnd, BitXor};
 use hybrid_array::Array;
 use hybrid_array::sizes::{U2, U4, U32, U64, U128};
 
-use crate::low::IAesBlock;
+use crate::low::AesBlockArray;
 
 use super::AesBlock;
 use super::AesBlock2;
@@ -37,7 +37,7 @@ impl From<AesBlock4> for Array<u8, U64> {
     }
 }
 
-impl IAesBlock for AesBlock4 {
+impl AesBlockArray for AesBlock4 {
     type Block = U64;
     type Block2 = U128;
 

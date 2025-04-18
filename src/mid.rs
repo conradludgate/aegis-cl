@@ -2,21 +2,26 @@ use aead::inout::InOut;
 use cipher::crypto_common::BlockSizes;
 use hybrid_array::{Array, ArraySize};
 
-use crate::low::{AesBlock, AesBlock2, AesBlock4, IAesBlock};
+use crate::low::{AesBlock, AesBlock2, AesBlock4, AesBlockArray};
 
-pub mod aegis128;
-pub mod aegis256;
+mod aegis128;
+mod aegis256;
 mod util;
 
 mod sealed {
     pub trait Sealed {}
 }
 
+pub use aegis128::State128X;
+pub use aegis256::State256X;
+
+/// The parallelism used by the AEGIS state.
 pub trait AegisParallel: sealed::Sealed {
+    /// The number of AES blocks to update in parallel.
     type Blocks: ArraySize;
 
     #[doc(hidden)]
-    type AesBlock: IAesBlock + Into<Array<AesBlock, Self::Blocks>>;
+    type AesBlock: AesBlockArray + Into<Array<AesBlock, Self::Blocks>>;
 
     #[doc(hidden)]
     fn ctx() -> Self::AesBlock;
@@ -66,8 +71,11 @@ impl AegisParallel for crate::X4 {
     }
 }
 
-pub trait AegisCore {
+/// The core AEGIS state and functions.
+pub trait AegisCore: Copy {
+    /// The size of the key/iv used to initialise this AEGIS state.
     type Key: ArraySize;
+    /// The size of the blocks processed by this AEGIS state.
     type Block: BlockSizes;
 
     fn new(key: &Array<u8, Self::Key>, iv: &Array<u8, Self::Key>) -> Self;
@@ -90,3 +98,17 @@ pub trait AegisCore {
 
     fn absorb(&mut self, ad: &Array<u8, Self::Block>);
 }
+
+// *  C0: an AES block built from the following bytes in hexadecimal
+// format: { 0x00, 0x01, 0x01, 0x02, 0x03, 0x05, 0x08, 0x0d, 0x15,
+// 0x22, 0x37, 0x59, 0x90, 0xe9, 0x79, 0x62 }.
+const C0: hybrid_array::Array<u8, hybrid_array::sizes::U16> = hybrid_array::Array([
+    0x00, 0x01, 0x01, 0x02, 0x03, 0x05, 0x08, 0x0d, 0x15, 0x22, 0x37, 0x59, 0x90, 0xe9, 0x79, 0x62,
+]);
+
+// *  C1: an AES block built from the following bytes in hexadecimal
+// format: { 0xdb, 0x3d, 0x18, 0x55, 0x6d, 0xc2, 0x2f, 0xf1, 0x20,
+// 0x11, 0x31, 0x42, 0x73, 0xb5, 0x28, 0xdd }.
+const C1: hybrid_array::Array<u8, hybrid_array::sizes::U16> = hybrid_array::Array([
+    0xdb, 0x3d, 0x18, 0x55, 0x6d, 0xc2, 0x2f, 0xf1, 0x20, 0x11, 0x31, 0x42, 0x73, 0xb5, 0x28, 0xdd,
+]);

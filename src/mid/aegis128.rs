@@ -4,12 +4,11 @@ use aead::inout::InOut;
 use digest::typenum::Unsigned;
 use hybrid_array::{Array, sizes::U16};
 
-use super::{AegisCore, util};
-use crate::{
-    AegisParallel, C0, C1, X1,
-    low::{AesBlock, IAesBlock},
-};
+use super::{AegisCore, AegisParallel, C0, C1, util};
+use crate::X1;
+use crate::low::{AesBlock, AesBlockArray};
 
+/// The state used by AEGIS-128.
 pub struct State128X<D: AegisParallel>([D::AesBlock; 8]);
 
 impl<D: AegisParallel> Clone for State128X<D> {
@@ -36,7 +35,7 @@ impl<D: AegisParallel> IndexMut<usize> for State128X<D> {
 
 impl<D: AegisParallel> AegisCore for State128X<D> {
     type Key = U16;
-    type Block = <D::AesBlock as IAesBlock>::Block2;
+    type Block = <D::AesBlock as AesBlockArray>::Block2;
 
     #[inline(always)]
     fn new(key: &Array<u8, U16>, iv: &Array<u8, U16>) -> Self {
@@ -380,7 +379,7 @@ impl<D: AegisParallel> AegisCore for State128X<D> {
     }
 
     #[inline(always)]
-    fn absorb(&mut self, ad: &Array<u8, <D::AesBlock as IAesBlock>::Block2>) {
+    fn absorb(&mut self, ad: &Array<u8, <D::AesBlock as AesBlockArray>::Block2>) {
         let (t0, t1) = util::split_blocks(ad);
         self.update(t0, t1);
     }
@@ -429,7 +428,7 @@ impl<D: AegisParallel> State128X<D> {
 }
 
 #[inline(always)]
-fn write<D: IAesBlock>(a: D, b: D, out: &mut Array<u8, D::Block2>) {
+fn write<D: AesBlockArray>(a: D, b: D, out: &mut Array<u8, D::Block2>) {
     let (p0, p1) = out.split_ref_mut::<D::Block>();
     *p0 = a.into();
     *p1 = b.into();
@@ -443,7 +442,7 @@ mod tests {
 
     use crate::{X1, X2, X4};
     use crate::{
-        low::{AesBlock, IAesBlock},
+        low::{AesBlock, AesBlockArray},
         mid::AegisCore,
     };
 

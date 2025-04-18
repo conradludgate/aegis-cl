@@ -82,20 +82,18 @@ mac.verify(&tag).unwrap();
 ```rust
 use aegis_cl::{
     cipher::{KeyIvInit, StreamCipher},
-    high::AegisStream,
-    mid::aegis128::State128X,
-    hybrid_array::sizes::U1,
+    high::AegisStream, mid::State128X, X1,
 };
 
-let key = AegisStream::<State128X<U1>>::generate_key().unwrap();
-let iv = AegisStream::<State128X<U1>>::generate_iv().unwrap();
+let key = AegisStream::<State128X<X1>>::generate_key().unwrap();
+let iv = AegisStream::<State128X<X1>>::generate_iv().unwrap();
 
 let mut buffer = *b"plaintext message";
 
-let mut cipher = AegisStream::<State128X<U1>>::new(&key, &iv);
+let mut cipher = AegisStream::<State128X<X1>>::new(&key, &iv);
 cipher.apply_keystream(&mut buffer);
 
-let mut cipher = AegisStream::<State128X<U1>>::new(&key, &iv);
+let mut cipher = AegisStream::<State128X<X1>>::new(&key, &iv);
 cipher.apply_keystream(&mut buffer);
 
 assert_eq!(&buffer, b"plaintext message");

@@ -1,6 +1,6 @@
 use hybrid_array::Array;
 
-use crate::low::{AesBlock, IAesBlock};
+use crate::low::{AesBlock, AesBlockArray};
 
 #[inline(always)]
 pub fn join_block(a: AesBlock, b: AesBlock) -> [u8; 32] {
@@ -13,7 +13,7 @@ pub fn join_block(a: AesBlock, b: AesBlock) -> [u8; 32] {
 }
 
 #[inline(always)]
-pub fn split_blocks<D: IAesBlock>(a: &Array<u8, D::Block2>) -> (D, D) {
+pub fn split_blocks<D: AesBlockArray>(a: &Array<u8, D::Block2>) -> (D, D) {
     let (a0, a1) = a.split_ref::<D::Block>();
     (D::from_block(a0), D::from_block(a1))
 }

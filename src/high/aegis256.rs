@@ -1,26 +1,9 @@
-use crate::mid::aegis256::State256X;
-use crate::{X1, X2, X4};
-
-use super::{Aegis, AegisMac};
-
-pub type Aegis256X<D, T> = Aegis<State256X<D>, T>;
-
-pub type Aegis256<T> = Aegis256X<X1, T>;
-pub type Aegis256X2<T> = Aegis256X<X2, T>;
-pub type Aegis256X4<T> = Aegis256X<X4, T>;
-
-pub type AegisMac256X<D, T> = AegisMac<State256X<D>, T>;
-
-pub type AegisMac256<T> = AegisMac256X<X1, T>;
-pub type AegisMac256X2<T> = AegisMac256X<X2, T>;
-pub type AegisMac256X4<T> = AegisMac256X<X4, T>;
-
 #[cfg(test)]
 mod tests {
     use aead::{Aead, AeadInOut, Key, KeyInit, Nonce, Payload, Tag, inout::InOutBuf};
 
-    use super::AegisMac256X;
-    use crate::{Aegis256X, AegisParallel, high::AegisTag};
+    use crate::high::{Aegis256X, AegisTag};
+    use crate::mid::AegisParallel;
 
     fn test_roundtrip<D: AegisParallel, T: AegisTag>(
         key: Key<Aegis256X<D, T>>,
@@ -437,8 +420,9 @@ mod tests {
         use hex_literal::hex;
         use hybrid_array::Array;
 
-        use super::AegisMac256X;
-        use crate::{AegisParallel, Tag128, Tag256, X1, X2, X4, high::AegisTag};
+        use crate::high::{AegisMac256X, AegisTag};
+        use crate::mid::AegisParallel;
+        use crate::{Tag128, Tag256, X1, X2, X4};
 
         fn test_mac<D: AegisParallel, T: AegisTag>(
             key: Key<AegisMac256X<D, T>>,

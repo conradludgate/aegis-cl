@@ -1,25 +1,9 @@
-use crate::{X1, X2, X4, mid::aegis128::State128X};
-
-use super::{Aegis, AegisMac};
-
-pub type Aegis128X<D, T> = Aegis<State128X<D>, T>;
-
-pub type Aegis128L<T> = Aegis128X<X1, T>;
-pub type Aegis128X2<T> = Aegis128X<X2, T>;
-pub type Aegis128X4<T> = Aegis128X<X4, T>;
-
-pub type AegisMac128X<D, T> = AegisMac<State128X<D>, T>;
-
-pub type AegisMac128L<T> = AegisMac128X<X1, T>;
-pub type AegisMac128X2<T> = AegisMac128X<X2, T>;
-pub type AegisMac128X4<T> = AegisMac128X<X4, T>;
-
 #[cfg(test)]
 mod tests {
     use aead::{Aead, AeadInOut, Key, KeyInit, Nonce, Payload, Tag, inout::InOutBuf};
 
-    use super::AegisMac128X;
-    use crate::{Aegis128X, AegisParallel, high::AegisTag};
+    use crate::high::{Aegis128X, AegisTag};
+    use crate::mid::AegisParallel;
 
     fn test_roundtrip<D: AegisParallel, T: AegisTag>(
         key: Key<Aegis128X<D, T>>,
@@ -352,8 +336,9 @@ mod tests {
         use hex_literal::hex;
         use hybrid_array::Array;
 
-        use super::AegisMac128X;
-        use crate::{AegisParallel, Tag128, X1, X2, X4, high::AegisTag};
+        use crate::high::{AegisMac128X, AegisTag};
+        use crate::mid::AegisParallel;
+        use crate::{Tag128, X1, X2, X4};
 
         fn test_mac<D: AegisParallel, T: AegisTag>(
             key: Key<AegisMac128X<D, T>>,

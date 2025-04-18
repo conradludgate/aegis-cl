@@ -19,6 +19,15 @@ use subtle::ConstantTimeEq;
 
 use crate::mid::AegisCore;
 
+/// The 128 bit variety of the AEGIS family of authenticated encryption algorithms.
+pub type Aegis128X<D, T> = Aegis<crate::mid::State128X<D>, T>;
+/// The 128 bit variety of the AEGIS family of message authentication code algorithms.
+pub type AegisMac128X<D, T> = AegisMac<crate::mid::State128X<D>, T>;
+/// The 256 bit variety of the AEGIS family of authenticated encryption algorithms.
+pub type Aegis256X<D, T> = Aegis<crate::mid::State256X<D>, T>;
+/// The 256 bit variety of the AEGIS family of message authentication code algorithms.
+pub type AegisMac256X<D, T> = AegisMac<crate::mid::State256X<D>, T>;
+
 mod sealed {
     pub trait Sealed {}
 }
@@ -64,6 +73,7 @@ impl AegisTag for crate::Tag256 {
     }
 }
 
+/// The AEGIS family of authenticated encryption algorithms.
 pub struct Aegis<C: AegisCore, T: AegisTag>(Array<u8, C::Key>, PhantomData<T>);
 
 impl<C: AegisCore, T: AegisTag> KeySizeUser for Aegis<C, T> {
@@ -215,12 +225,23 @@ fn bits(bytes: usize) -> aead::Result<u64> {
         .ok_or(aead::Error)
 }
 
-#[derive(Clone)]
+/// The AEGIS family of message authentication code algorithms.
 pub struct AegisMac<C: AegisCore, T: AegisTag> {
     state: C,
     blocks: BlockBuffer<C::Block, Eager>,
     data_len_bits: u64,
     _parallel: PhantomData<T>,
+}
+
+impl<C: AegisCore, T: AegisTag> Clone for AegisMac<C, T> {
+    fn clone(&self) -> Self {
+        Self {
+            state: self.state,
+            blocks: self.blocks.clone(),
+            data_len_bits: self.data_len_bits,
+            _parallel: PhantomData,
+        }
+    }
 }
 
 impl<C: AegisCore, T: AegisTag> KeySizeUser for AegisMac<C, T> {

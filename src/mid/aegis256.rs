@@ -5,12 +5,11 @@ use digest::typenum::Unsigned;
 use hybrid_array::Array;
 use hybrid_array::sizes::U32;
 
-use super::{AegisCore, util};
-use crate::{
-    AegisParallel, C0, C1, X1,
-    low::{AesBlock, IAesBlock},
-};
+use super::{AegisCore, AegisParallel, C0, C1, util};
+use crate::X1;
+use crate::low::{AesBlock, AesBlockArray};
 
+/// The state used by AEGIS-256.
 pub struct State256X<D: AegisParallel>([D::AesBlock; 6]);
 
 impl<D: AegisParallel> Clone for State256X<D> {
@@ -37,7 +36,7 @@ impl<D: AegisParallel> IndexMut<usize> for State256X<D> {
 
 impl<D: AegisParallel> AegisCore for State256X<D> {
     type Key = U32;
-    type Block = <D::AesBlock as IAesBlock>::Block;
+    type Block = <D::AesBlock as AesBlockArray>::Block;
 
     #[inline(always)]
     fn new(key: &Array<u8, U32>, iv: &Array<u8, U32>) -> Self {
@@ -423,7 +422,7 @@ mod tests {
 
     use crate::{X1, X2, X4};
     use crate::{
-        low::{AesBlock, IAesBlock},
+        low::{AesBlock, AesBlockArray},
         mid::AegisCore,
     };
 

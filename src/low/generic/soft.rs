@@ -4,7 +4,7 @@ use hybrid_array::Array;
 use hybrid_array::sizes::{U1, U16, U32};
 
 use crate::AegisParallel;
-use crate::low::IAesBlock;
+use crate::low::AesBlockArray;
 
 impl AegisParallel for U1 {
     type Block2 = U32;
@@ -37,7 +37,7 @@ impl From<AesBlock> for Array<u8, U16> {
     }
 }
 
-impl IAesBlock for AesBlock {
+impl AesBlockArray for AesBlock {
     type Size = U16;
 
     #[inline(always)]

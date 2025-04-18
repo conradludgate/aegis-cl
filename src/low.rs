@@ -2,16 +2,26 @@ use cipher::crypto_common::BlockSizes;
 use hybrid_array::Array;
 use std::ops::{Add, BitAnd, BitXor, Sub};
 
-pub trait IAesBlock:
+/// An array of [`AesBlock`]s, which might have a more optimised representation depending on platform support.
+pub trait AesBlockArray:
     Copy + From<AesBlock> + BitXor<Output = Self> + BitAnd<Output = Self> + Into<Array<u8, Self::Block>>
 {
+    /// The size of 1 AES block array.
     type Block: BlockSizes + Add<Self::Block, Output = Self::Block2>;
+    /// The size of 2 AES block arrays.
     type Block2: BlockSizes + Sub<Self::Block, Output = Self::Block>;
 
+    /// A single round of the AES encryption round function,
+    /// which is the composition of the SubBytes, ShiftRows, MixColums, and AddRoundKey transformations
     fn aes(self, key: Self) -> Self;
+
+    /// Reduce the array of AES blocks into a singular AES block via XOR.
     fn reduce_xor(self) -> AesBlock;
+
+    /// Returns the first AES block in the array.
     fn first(&self) -> AesBlock;
 
+    /// Cast an array of bytes into this AES block array.
     fn from_block(a: &Array<u8, Self::Block>) -> Self;
 }
 
@@ -36,7 +46,7 @@ mod tests {
     use hybrid_array::Array;
     use hybrid_array::sizes::U16;
 
-    use crate::low::{AesBlock, IAesBlock};
+    use crate::low::{AesBlock, AesBlockArray};
 
     /// <https://www.ietf.org/archive/id/draft-irtf-cfrg-aegis-aead-16.html#appendix-A.1>
     #[test]
