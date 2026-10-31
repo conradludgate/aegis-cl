@@ -1,5 +1,4 @@
 #![doc = include_str!("../README.md")]
-#![cfg_attr(all(target_arch = "x86_64"), feature(stdarch_x86_avx512))]
 #![deny(unsafe_code)]
 #![deny(clippy::multiple_unsafe_ops_per_block)]
 

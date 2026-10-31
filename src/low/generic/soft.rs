@@ -3,15 +3,7 @@ use std::ops::{BitAnd, BitXor};
 use hybrid_array::Array;
 use hybrid_array::sizes::{U1, U16, U32};
 
-use crate::AegisParallel;
 use crate::low::AesBlockArray;
-
-impl AegisParallel for U1 {
-    type Block2 = U32;
-    type Block = U16;
-
-    type AesBlock = AesBlock;
-}
 
 #[derive(Clone, Copy)]
 pub struct AesBlock(aes::Block);
@@ -37,8 +29,15 @@ impl From<AesBlock> for Array<u8, U16> {
     }
 }
 
+impl From<AesBlock> for [u8; 16] {
+    fn from(value: AesBlock) -> Self {
+        value.0.into()
+    }
+}
+
 impl AesBlockArray for AesBlock {
-    type Size = U16;
+    type Block = U16;
+    type Block2 = U32;
 
     #[inline(always)]
     fn aes(mut self, key: Self) -> Self {
@@ -57,7 +56,7 @@ impl AesBlockArray for AesBlock {
     }
 
     #[inline(always)]
-    fn from_block(a: &Array<u8, Self::Size>) -> Self {
+    fn from_block(a: &Array<u8, Self::Block>) -> Self {
         Self(*a)
     }
 }
