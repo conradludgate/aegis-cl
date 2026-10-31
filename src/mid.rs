@@ -26,7 +26,17 @@ pub use aegis256::State256X;
 #[doc(hidden)]
 pub trait BackendParallel<B: Backend>: sealed::Sealed {
     type Storage: AesBlockArray<B::Scalar>;
-    fn backend_ctx() -> Self::Storage;
+    #[inline(always)]
+    fn backend_ctx() -> Self::Storage {
+        let mut ctx = Array::<u8, <Self::Storage as AesBlockArray<B::Scalar>>::Block>::default();
+        let lanes = ctx.len() / 16;
+        // Each AES lane is domain-separated by (lane index, lane count - 1).
+        for (i, lane) in ctx.as_chunks_mut::<16>().0.iter_mut().enumerate() {
+            lane[0] = i as u8;
+            lane[1] = (lanes - 1) as u8;
+        }
+        Self::Storage::from_block(&ctx)
+    }
 }
 type Repr<D, B> = <D as BackendParallel<B>>::Storage;
 
@@ -43,6 +53,9 @@ pub trait AegisParallel:
 }
 macro_rules! parallel {
     ($name:ident, $count:ident, $repr:ident) => {
+        impl<B: Backend> BackendParallel<B> for crate::$name {
+            type Storage = <B as Backend>::$repr;
+        }
         impl sealed::Sealed for crate::$name {
             type State128<B: Backend> = State128X<Self, B>;
             type State256<B: Backend> = State256X<Self, B>;
@@ -59,36 +72,6 @@ macro_rules! parallel {
 parallel!(X1, U1, Scalar);
 parallel!(X2, U2, Pair);
 parallel!(X4, U4, Quad);
-impl<B: Backend> BackendParallel<B> for crate::X1 {
-    type Storage = B::Scalar;
-    fn backend_ctx() -> Self::Storage {
-        B::Scalar::from_block(&Array([0; 16]))
-    }
-}
-impl<B: Backend> BackendParallel<B> for crate::X2 {
-    type Storage = B::Pair;
-    fn backend_ctx() -> Self::Storage {
-        let mut a = Array([0; 32]);
-        a[16] = 1;
-        a[1] = 1;
-        a[17] = 1;
-        B::Pair::from_block(&a)
-    }
-}
-impl<B: Backend> BackendParallel<B> for crate::X4 {
-    type Storage = B::Quad;
-    fn backend_ctx() -> Self::Storage {
-        let mut a = Array([0; 64]);
-        a[16] = 1;
-        a[32] = 2;
-        a[48] = 3;
-        a[1] = 3;
-        a[17] = 3;
-        a[33] = 3;
-        a[49] = 3;
-        B::Quad::from_block(&a)
-    }
-}
 
 /// The core AEGIS state and functions.
 pub trait AegisCore: Copy {

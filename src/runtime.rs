@@ -11,9 +11,10 @@
 use crate::{
     high::AegisTag,
     low::backend::Backend,
-    mid::{AegisCore, State128X, State256X},
+    mid::{AegisCore, AegisParallel, State128X, State256X},
 };
 use aead::inout::InOutBuf;
+use cipher::typenum::Unsigned;
 use core::marker::PhantomData;
 use hybrid_array::Array;
 
@@ -31,20 +32,20 @@ pub trait Algorithm: AegisCore {
     const AUTO_DETECT: bool;
 }
 macro_rules! algorithm {
-    ($state:ident, $lanes:ident, $n:literal) => {
+    ($state:ident, $lanes:ident) => {
         impl<B: Backend> Algorithm for $state<crate::$lanes, B> {
             type Core<Other: Backend> = $state<crate::$lanes, Other>;
-            const LANES: usize = $n;
+            const LANES: usize = <crate::$lanes as AegisParallel>::Blocks::USIZE;
             const AUTO_DETECT: bool = B::AUTO_DETECT;
         }
     };
 }
-algorithm!(State128X, X1, 1);
-algorithm!(State128X, X2, 2);
-algorithm!(State128X, X4, 4);
-algorithm!(State256X, X1, 1);
-algorithm!(State256X, X2, 2);
-algorithm!(State256X, X4, 4);
+algorithm!(State128X, X1);
+algorithm!(State128X, X2);
+algorithm!(State128X, X4);
+algorithm!(State256X, X1);
+algorithm!(State256X, X2);
+algorithm!(State256X, X4);
 
 #[inline(always)]
 pub(crate) fn encrypt<A: Algorithm, T: AegisTag>(
