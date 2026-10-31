@@ -143,8 +143,11 @@ where
         let xi = block.get_in();
         let (t0, t1) = util::split_blocks::<Repr<D, B>, B::Scalar>(xi);
 
-        // Update(t0, t1)
-        v.update(t0, t1);
+        // The AVX-512 schedule benefits from storing first; smaller lane
+        // counts retain their update-first schedule. Both checks fold away.
+        if D::Blocks::USIZE != 4 {
+            v.update(t0, t1);
+        }
 
         // out0 = t0 ^ z0
         // out1 = t1 ^ z1
@@ -154,6 +157,11 @@ where
         // ci = out0 || out1
         let ci = block.get_out();
         write::<Repr<D, B>, B::Scalar>(out0, out1, ci);
+
+        // Both input halves are copied above, so in-place output is safe.
+        if D::Blocks::USIZE == 4 {
+            v.update(t0, t1);
+        }
     }
 
     #[inline(always)]
