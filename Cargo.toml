@@ -2,6 +2,7 @@
 name = "aegis-cl"
 version = "0.1.0"
 edition = "2024"
+rust-version = "1.89"
 
 [dependencies]
 hybrid-array = "0.3.0"
@@ -36,4 +37,8 @@ harness = false
 
 [[bench]]
 name = "mac"
+harness = false
+
+[[bench]]
+name = "runtime"
 harness = false

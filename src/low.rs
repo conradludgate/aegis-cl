@@ -28,17 +28,20 @@ pub trait AesBlockArray<S = AesBlock>:
 #[doc(hidden)]
 pub mod backend;
 
+#[cfg(all(target_arch = "aarch64", target_feature = "aes"))]
+#[allow(unsafe_code)]
+mod aarch64;
+mod generic;
+#[cfg(target_arch = "x86_64")]
+#[allow(unsafe_code)]
+pub(crate) mod x86_64;
+
 cfg_if::cfg_if! {
     if #[cfg(all(target_arch = "aarch64", target_feature = "aes"))] {
-        #[allow(unsafe_code)]
-        mod aarch64;
         pub use aarch64::{AesBlock, AesBlock2, AesBlock4};
     } else if #[cfg(all(target_arch = "x86_64", target_feature = "aes"))] {
-        #[allow(unsafe_code)]
-        mod x86_64;
         pub use x86_64::{AesBlock, AesBlock2, AesBlock4};
     } else {
-        mod generic;
         pub use generic::{AesBlock, AesBlock2, AesBlock4};
     }
 }
