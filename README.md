@@ -10,6 +10,29 @@ Currently this is built using an [unstable version of RustCrypto traits](https:/
 
 ## Features
 
+### Runtime CPU selection
+
+The existing AEAD types automatically select AES-NI, VAES or AVX-512 on
+x86_64 and enter a specialized implementation for each complete encrypt/decrypt
+call. Global `RUSTFLAGS` are unnecessary. X4 always implements the X4 algorithm,
+even when the selected CPU implementation uses narrower instructions.
+
+```rust
+use aegis_cl::{Aegis128X4, Tag128, aead::KeyInit};
+let cipher = Aegis128X4::<Tag128>::new(&[0x42; 16].into());
+```
+
+When the build enables AES + AVX2 + VAES (and AVX512F for X4), calls use the
+compile-time backend directly: no runtime detection, stored selector or dispatch
+match. Otherwise capabilities are cached globally and selected at each complete
+operation, outside the block loops. The AEAD object still stores only its key.
+
+Custom `AegisCore` implementations retain the static engine. Low-level core
+operations, MAC and stream interfaces also remain static; stateful runtime
+selection is separate follow-up work. Other architectures use the existing
+compile-time engine. Rust 1.89 or later is required for the stable AVX-512
+intrinsics compiled into the portable x86_64 binary.
+
 ### Authenticated Encryption with Additional Data (AEAD)
 
 - `Aegis128L` offers authenticated encryption with 128 bit keys and nonces.

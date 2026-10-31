@@ -9,7 +9,15 @@ mod aegis128;
 mod aegis256;
 mod util;
 mod sealed {
-    pub trait Sealed {}
+    use crate::{low::backend::Backend, runtime::Algorithm};
+    use hybrid_array::sizes::{U16, U32};
+
+    // These mappings let generic lane types reach the closed runtime algorithm
+    // implementations without sealing the public, customizable AegisCore trait.
+    pub trait Sealed {
+        type State128<B: Backend>: Algorithm<Key = U16>;
+        type State256<B: Backend>: Algorithm<Key = U32>;
+    }
 }
 pub use aegis128::State128X;
 pub use aegis256::State256X;
@@ -35,7 +43,10 @@ pub trait AegisParallel:
 }
 macro_rules! parallel {
     ($name:ident, $count:ident, $repr:ident) => {
-        impl sealed::Sealed for crate::$name {}
+        impl sealed::Sealed for crate::$name {
+            type State128<B: Backend> = State128X<Self, B>;
+            type State256<B: Backend> = State256X<Self, B>;
+        }
         impl AegisParallel for crate::$name {
             type Blocks = hybrid_array::sizes::$count;
             type AesBlock = <Static as Backend>::$repr;
@@ -105,6 +116,31 @@ pub trait AegisCore: Copy {
     fn finalize_mac256(self, data_len_bits: u64) -> [u8; 32];
 
     fn absorb(&mut self, ad: &Array<u8, Self::Block>);
+
+    /// Complete AEAD operation. Built-in cores may select a CPU backend here.
+    #[doc(hidden)]
+    #[inline(always)]
+    fn encrypt_aead<T: crate::high::AegisTag>(
+        key: &Array<u8, Self::Key>,
+        nonce: &Array<u8, Self::Key>,
+        ad: &[u8],
+        data: aead::inout::InOutBuf<'_, '_, u8>,
+    ) -> aead::Result<Array<u8, T::Size>> {
+        crate::high::encrypt::<Self, T>(key, nonce, ad, data)
+    }
+
+    /// Complete AEAD operation; custom cores retain the static default engine.
+    #[doc(hidden)]
+    #[inline(always)]
+    fn decrypt_aead<T: crate::high::AegisTag>(
+        key: &Array<u8, Self::Key>,
+        nonce: &Array<u8, Self::Key>,
+        ad: &[u8],
+        data: aead::inout::InOutBuf<'_, '_, u8>,
+        tag: &Array<u8, T::Size>,
+    ) -> aead::Result<()> {
+        crate::high::decrypt::<Self, T>(key, nonce, ad, data, tag)
+    }
 }
 
 // *  C0: an AES block built from the following bytes in hexadecimal

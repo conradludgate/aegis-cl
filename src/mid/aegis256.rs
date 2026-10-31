@@ -384,6 +384,27 @@ where
     fn absorb(&mut self, ad: &Array<u8, Self::Block>) {
         self.update(Repr::<D, B>::from_block(ad));
     }
+
+    #[inline(always)]
+    fn encrypt_aead<T: crate::high::AegisTag>(
+        key: &Array<u8, Self::Key>,
+        nonce: &Array<u8, Self::Key>,
+        ad: &[u8],
+        data: aead::inout::InOutBuf<'_, '_, u8>,
+    ) -> aead::Result<Array<u8, T::Size>> {
+        crate::runtime::encrypt::<D::State256<B>, T>(key, nonce, ad, data)
+    }
+
+    #[inline(always)]
+    fn decrypt_aead<T: crate::high::AegisTag>(
+        key: &Array<u8, Self::Key>,
+        nonce: &Array<u8, Self::Key>,
+        ad: &[u8],
+        data: aead::inout::InOutBuf<'_, '_, u8>,
+        tag: &Array<u8, T::Size>,
+    ) -> aead::Result<()> {
+        crate::runtime::decrypt::<D::State256<B>, T>(key, nonce, ad, data, tag)
+    }
 }
 
 impl<D: AegisParallel + BackendParallel<B>, B: Backend> State256X<D, B> {

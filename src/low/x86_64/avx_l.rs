@@ -1,3 +1,6 @@
+//! Instruction preconditions: AES. This representation is used
+//! only below a checked runtime entry or through compile-time aliases that
+//! require these features globally; see the enclosing module's invariant.
 use std::arch::x86_64::*;
 use std::ops::{BitAnd, BitXor};
 
@@ -35,7 +38,9 @@ impl From<AesBlock> for Array<u8, U16> {
 impl From<AesBlock> for [u8; 16] {
     #[inline(always)]
     fn from(val: AesBlock) -> Self {
-        // Safety: both types are equivalent, and transmute does not care about alignment.
+        // SAFETY: these equally sized integer vectors/byte arrays have no invalid
+        // bit patterns. All source bytes are initialized; this by-value conversion
+        // creates no references and transfers no allocation ownership.
         unsafe { core::mem::transmute::<__m128i, [u8; 16]>(val.0) }
     }
 }
@@ -46,7 +51,7 @@ impl AesBlockArray<AesBlock> for AesBlock {
 
     #[inline(always)]
     fn aes(self, key: Self) -> Self {
-        // Safety: we require target_feature = "aes".
+        // SAFETY: the module's native-backend boundary establishes aes.
         Self(unsafe { _mm_aesenc_si128(self.0, key.0) })
     }
 
@@ -62,7 +67,9 @@ impl AesBlockArray<AesBlock> for AesBlock {
 
     #[inline(always)]
     fn from_block(a: &Array<u8, Self::Block>) -> Self {
-        // Safety: both types are equivalent, and transmute does not care about alignment.
+        // SAFETY: these equally sized integer vectors/byte arrays have no invalid
+        // bit patterns. All source bytes are initialized; this by-value conversion
+        // creates no references and transfers no allocation ownership.
         AesBlock(unsafe { core::mem::transmute::<[u8; 16], __m128i>(a.0) })
     }
 }
@@ -72,8 +79,7 @@ impl BitXor for AesBlock {
 
     #[inline(always)]
     fn bitxor(self, rhs: Self) -> Self::Output {
-        // Safety: we require target_feature = "aes".
-        // I think aes implies sse2???
+        // SAFETY: SSE2 is part of the x86_64 baseline.
         Self(unsafe { _mm_xor_si128(self.0, rhs.0) })
     }
 }
@@ -83,8 +89,7 @@ impl BitAnd for AesBlock {
 
     #[inline(always)]
     fn bitand(self, rhs: Self) -> Self::Output {
-        // Safety: we require target_feature = "aes".
-        // I think aes implies sse2???
+        // SAFETY: SSE2 is part of the x86_64 baseline.
         Self(unsafe { _mm_and_si128(self.0, rhs.0) })
     }
 }

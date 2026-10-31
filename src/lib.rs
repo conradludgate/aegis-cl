@@ -26,6 +26,8 @@ pub mod low;
 /// low level internals, including AES hardware optimisations.
 pub mod mid;
 
+mod runtime;
+
 /// AEGIS-128L Authenticated Encryption
 ///
 /// This is an [AEAD](`aead`) with 16 byte keys and 16 byte IVs.

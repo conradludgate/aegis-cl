@@ -1,3 +1,6 @@
+//! Instruction preconditions: AVX2 and VAES. This representation is used
+//! only below a checked runtime entry or through compile-time aliases that
+//! require these features globally; see the enclosing module's invariant.
 use std::arch::x86_64::*;
 use std::ops::{BitAnd, BitXor};
 
@@ -15,7 +18,7 @@ pub struct AesBlock2(pub(super) __m256i);
 impl From<AesBlock> for AesBlock2 {
     #[inline(always)]
     fn from(a: AesBlock) -> Self {
-        // Safety: we require target_feature = "avx2".
+        // SAFETY: the module's native-backend boundary establishes avx2.
         Self(unsafe { _mm256_broadcastsi128_si256(a.0) })
     }
 }
@@ -24,8 +27,8 @@ impl From<[AesBlock; 2]> for AesBlock2 {
     #[inline(always)]
     fn from(value: [AesBlock; 2]) -> Self {
         let [a, b] = value;
-        // Safety: we require target_feature = "avx2".
-        // I think avx2 implies avx???
+        // SAFETY: the module's native-backend boundary establishes AVX2,
+        // which includes AVX for the 128-bit lane assembly.
         unsafe { Self(_mm256_setr_m128i(a.0, b.0)) }
     }
 }
@@ -33,9 +36,9 @@ impl From<[AesBlock; 2]> for AesBlock2 {
 impl From<AesBlock2> for Array<AesBlock, U2> {
     #[inline(always)]
     fn from(val: AesBlock2) -> Self {
-        // Safety: we require target_feature = "avx2".
+        // SAFETY: the module's native-backend boundary establishes avx2.
         let a = AesBlock(unsafe { _mm256_extracti128_si256::<0>(val.0) });
-        // Safety: we require target_feature = "avx2".
+        // SAFETY: the module's native-backend boundary establishes avx2.
         let b = AesBlock(unsafe { _mm256_extracti128_si256::<1>(val.0) });
         Array([a, b])
     }
@@ -44,7 +47,9 @@ impl From<AesBlock2> for Array<AesBlock, U2> {
 impl From<AesBlock2> for Array<u8, U32> {
     #[inline(always)]
     fn from(val: AesBlock2) -> Self {
-        // Safety: both types are equivalent, and transmute does not care about alignment.
+        // SAFETY: these equally sized integer vectors/byte arrays have no invalid
+        // bit patterns. All source bytes are initialized; this by-value conversion
+        // creates no references and transfers no allocation ownership.
         Array(unsafe { core::mem::transmute::<__m256i, [u8; 32]>(val.0) })
     }
 }
@@ -55,28 +60,30 @@ impl AesBlockArray<AesBlock> for AesBlock2 {
 
     #[inline(always)]
     fn aes(self, key: Self) -> Self {
-        // Safety: we require target_feature = "vaes".
+        // SAFETY: the module's native-backend boundary establishes vaes.
         Self(unsafe { _mm256_aesenc_epi128(self.0, key.0) })
     }
 
     #[inline(always)]
     fn reduce_xor(self) -> AesBlock {
-        // Safety: we require target_feature = "avx2".
+        // SAFETY: the module's native-backend boundary establishes avx2.
         let a = AesBlock(unsafe { _mm256_extracti128_si256::<0>(self.0) });
-        // Safety: we require target_feature = "avx2".
+        // SAFETY: the module's native-backend boundary establishes avx2.
         let b = AesBlock(unsafe { _mm256_extracti128_si256::<1>(self.0) });
         a ^ b
     }
 
     #[inline(always)]
     fn first(&self) -> AesBlock {
-        // Safety: we require target_feature = "avx2".
+        // SAFETY: the module's native-backend boundary establishes avx2.
         AesBlock(unsafe { _mm256_extracti128_si256::<0>(self.0) })
     }
 
     #[inline(always)]
     fn from_block(a: &Array<u8, Self::Block>) -> Self {
-        // Safety: both types are equivalent, and transmute does not care about alignment.
+        // SAFETY: these equally sized integer vectors/byte arrays have no invalid
+        // bit patterns. All source bytes are initialized; this by-value conversion
+        // creates no references and transfers no allocation ownership.
         Self(unsafe { core::mem::transmute::<[u8; 32], __m256i>(a.0) })
     }
 }
@@ -86,7 +93,7 @@ impl BitXor for AesBlock2 {
 
     #[inline(always)]
     fn bitxor(self, rhs: Self) -> Self::Output {
-        // Safety: we require target_feature = "avx2".
+        // SAFETY: the module's native-backend boundary establishes avx2.
         Self(unsafe { _mm256_xor_si256(self.0, rhs.0) })
     }
 }
@@ -96,7 +103,7 @@ impl BitAnd for AesBlock2 {
 
     #[inline(always)]
     fn bitand(self, rhs: Self) -> Self::Output {
-        // Safety: we require target_feature = "avx2".
+        // SAFETY: the module's native-backend boundary establishes avx2.
         Self(unsafe { _mm256_and_si256(self.0, rhs.0) })
     }
 }

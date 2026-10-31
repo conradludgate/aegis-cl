@@ -389,6 +389,27 @@ where
         let (t0, t1) = util::split_blocks::<Repr<D, B>, B::Scalar>(ad);
         self.update(t0, t1);
     }
+
+    #[inline(always)]
+    fn encrypt_aead<T: crate::high::AegisTag>(
+        key: &Array<u8, Self::Key>,
+        nonce: &Array<u8, Self::Key>,
+        ad: &[u8],
+        data: aead::inout::InOutBuf<'_, '_, u8>,
+    ) -> aead::Result<Array<u8, T::Size>> {
+        crate::runtime::encrypt::<D::State128<B>, T>(key, nonce, ad, data)
+    }
+
+    #[inline(always)]
+    fn decrypt_aead<T: crate::high::AegisTag>(
+        key: &Array<u8, Self::Key>,
+        nonce: &Array<u8, Self::Key>,
+        ad: &[u8],
+        data: aead::inout::InOutBuf<'_, '_, u8>,
+        tag: &Array<u8, T::Size>,
+    ) -> aead::Result<()> {
+        crate::runtime::decrypt::<D::State128<B>, T>(key, nonce, ad, data, tag)
+    }
 }
 
 impl<D: AegisParallel + BackendParallel<B>, B: Backend> State128X<D, B> {
