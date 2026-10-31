@@ -348,7 +348,7 @@ impl<D: AegisParallel> AegisCore for State128X<D> {
             // for v in Split(tags, 256):
             //     x0, x1 = Split(v, 128)
             //     Absorb(ZeroPad(x0, R / 2) || ZeroPad(x1, R / 2))
-            for i in 0..<D::Blocks as Unsigned>::USIZE {
+            for i in 1..<D::Blocks as Unsigned>::USIZE {
                 let x0 = tags0[i];
                 let x1 = tags1[i];
                 v.update(x0, x1);

@@ -284,7 +284,9 @@ impl<C: AegisCore, T: AegisTag> OutputSizeUser for AegisMac<C, T> {
 
 impl<C: AegisCore, T: AegisTag> FixedOutput for AegisMac<C, T> {
     fn finalize_into(mut self, out: &mut digest::Output<Self>) {
-        self.state.absorb(&self.blocks.pad_with_zeros());
+        if self.blocks.get_pos() > 0 {
+            self.state.absorb(&self.blocks.pad_with_zeros());
+        }
         *out = T::finalize_mac(self.state, self.data_len_bits)
     }
 }
