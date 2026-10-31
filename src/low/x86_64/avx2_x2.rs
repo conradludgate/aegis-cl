@@ -49,7 +49,7 @@ impl From<AesBlock2> for Array<u8, U32> {
     }
 }
 
-impl AesBlockArray for AesBlock2 {
+impl AesBlockArray<AesBlock> for AesBlock2 {
     type Block = U32;
     type Block2 = U64;
 

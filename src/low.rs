@@ -3,8 +3,8 @@ use hybrid_array::Array;
 use std::ops::{Add, BitAnd, BitXor, Sub};
 
 /// An array of [`AesBlock`]s, which might have a more optimised representation depending on platform support.
-pub trait AesBlockArray:
-    Copy + From<AesBlock> + BitXor<Output = Self> + BitAnd<Output = Self> + Into<Array<u8, Self::Block>>
+pub trait AesBlockArray<S = AesBlock>:
+    Copy + From<S> + BitXor<Output = Self> + BitAnd<Output = Self> + Into<Array<u8, Self::Block>>
 {
     /// The size of 1 AES block array.
     type Block: BlockSizes + Add<Self::Block, Output = Self::Block2>;
@@ -16,14 +16,17 @@ pub trait AesBlockArray:
     fn aes(self, key: Self) -> Self;
 
     /// Reduce the array of AES blocks into a singular AES block via XOR.
-    fn reduce_xor(self) -> AesBlock;
+    fn reduce_xor(self) -> S;
 
     /// Returns the first AES block in the array.
-    fn first(&self) -> AesBlock;
+    fn first(&self) -> S;
 
     /// Cast an array of bytes into this AES block array.
     fn from_block(a: &Array<u8, Self::Block>) -> Self;
 }
+
+#[doc(hidden)]
+pub mod backend;
 
 cfg_if::cfg_if! {
     if #[cfg(all(target_arch = "aarch64", target_feature = "aes"))] {

@@ -1,63 +1,72 @@
+use crate::low::{
+    AesBlock, AesBlockArray,
+    backend::{Backend, Static},
+};
 use aead::inout::InOut;
 use cipher::crypto_common::BlockSizes;
 use hybrid_array::{Array, ArraySize};
-
-use crate::low::{AesBlock, AesBlock2, AesBlock4, AesBlockArray};
-
 mod aegis128;
 mod aegis256;
 mod util;
-
 mod sealed {
     pub trait Sealed {}
 }
-
 pub use aegis128::State128X;
 pub use aegis256::State256X;
 
+/// Internal mapping from algorithm lanes to a backend's block representation.
+#[doc(hidden)]
+pub trait BackendParallel<B: Backend>: sealed::Sealed {
+    type Storage: AesBlockArray<B::Scalar>;
+    fn backend_ctx() -> Self::Storage;
+}
+type Repr<D, B> = <D as BackendParallel<B>>::Storage;
+
 /// The parallelism used by the AEGIS state.
-pub trait AegisParallel: sealed::Sealed {
+pub trait AegisParallel:
+    sealed::Sealed + BackendParallel<Static, Storage = Self::AesBlock>
+{
     /// The number of AES blocks to update in parallel.
     type Blocks: ArraySize;
-
     #[doc(hidden)]
     type AesBlock: AesBlockArray + Into<Array<AesBlock, Self::Blocks>>;
-
     #[doc(hidden)]
     fn ctx() -> Self::AesBlock;
 }
-
-impl sealed::Sealed for crate::X1 {}
-impl AegisParallel for crate::X1 {
-    type Blocks = hybrid_array::sizes::U1;
-    type AesBlock = AesBlock;
-
-    fn ctx() -> Self::AesBlock {
-        AesBlock::from_block(&Array([0; 16]))
+macro_rules! parallel {
+    ($name:ident, $count:ident, $repr:ident) => {
+        impl sealed::Sealed for crate::$name {}
+        impl AegisParallel for crate::$name {
+            type Blocks = hybrid_array::sizes::$count;
+            type AesBlock = <Static as Backend>::$repr;
+            fn ctx() -> Self::AesBlock {
+                <Self as BackendParallel<Static>>::backend_ctx()
+            }
+        }
+    };
+}
+parallel!(X1, U1, Scalar);
+parallel!(X2, U2, Pair);
+parallel!(X4, U4, Quad);
+impl<B: Backend> BackendParallel<B> for crate::X1 {
+    type Storage = B::Scalar;
+    fn backend_ctx() -> Self::Storage {
+        B::Scalar::from_block(&Array([0; 16]))
     }
 }
-
-impl sealed::Sealed for crate::X2 {}
-impl AegisParallel for crate::X2 {
-    type Blocks = hybrid_array::sizes::U2;
-    type AesBlock = AesBlock2;
-
-    fn ctx() -> Self::AesBlock {
+impl<B: Backend> BackendParallel<B> for crate::X2 {
+    type Storage = B::Pair;
+    fn backend_ctx() -> Self::Storage {
         let mut a = Array([0; 32]);
         a[16] = 1;
         a[1] = 1;
         a[17] = 1;
-
-        AesBlock2::from_block(&a)
+        B::Pair::from_block(&a)
     }
 }
-
-impl sealed::Sealed for crate::X4 {}
-impl AegisParallel for crate::X4 {
-    type Blocks = hybrid_array::sizes::U4;
-    type AesBlock = AesBlock4;
-
-    fn ctx() -> Self::AesBlock {
+impl<B: Backend> BackendParallel<B> for crate::X4 {
+    type Storage = B::Quad;
+    fn backend_ctx() -> Self::Storage {
         let mut a = Array([0; 64]);
         a[16] = 1;
         a[32] = 2;
@@ -66,8 +75,7 @@ impl AegisParallel for crate::X4 {
         a[17] = 3;
         a[33] = 3;
         a[49] = 3;
-
-        AesBlock4::from_block(&a)
+        B::Quad::from_block(&a)
     }
 }
 
